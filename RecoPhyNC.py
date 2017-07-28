@@ -5,6 +5,7 @@ import os
 import sys
 import re
 import networkx
+import Queue
 
 #############################################################################
 # RecoPhyNC - recognizing phylogenetic networks classes
@@ -134,7 +135,7 @@ class PhyloNetwork:
     :return:
     """
 
-    X = set(self.N.nodes()) # TODO: use a FIFO
+    X = set(self.N.nodes()) #NOTE: we need a set here to avoid having a node multiple times in the queue
     while X:
       v = X.pop()
       #self.log('considering ' + str(v) + ' with indeg ' + str(self.N.in_degree(v)) + ' & outdeg ' + str(self.N.out_degree(v)))
@@ -155,7 +156,9 @@ class PhyloNetwork:
     #t0=datetime.datetime.now()
 
     # the current bottom-up front
-    X = set(self.leaves) # TODO: use FIFO
+    X = Queue.Queue()
+    map(X.put, self.leaves)
+
     # the current number of vertices that can see x
     spread = dict()
     for x in self.leaves:
@@ -166,9 +169,8 @@ class PhyloNetwork:
     # for each vertex, how many successors we have processed
     childs_seen = dict()
 
-    while X:
-      #TODO: make X a FIFO instead of a set
-      i = X.pop()
+    while not X.empty():
+      i = X.get(False)
 
       for j in reach[i]:
         spread[j] -= 1
@@ -180,7 +182,7 @@ class PhyloNetwork:
             spread[j] = spread.get(j, 0) + 1
           reach[p].add(j)
         if childs_seen[p] == self.N.out_degree(p):
-          X.add(p)
+          X.put(p)
           self.stability[p] = set([x for x in self.leaves if x in reach[p] and spread[x] == 1])
       self.log('among ' + str(X) + ', the spread is ' + str(spread))
     #print "Time Stable vertices: "+str((datetime.datetime.now()-t0).microseconds)+"ms."
@@ -304,6 +306,9 @@ class PhyloNetwork:
       if self.node_type(self.N.successors(u)[0]) == 'tree':
         self.log('component-root ' + str(u) + ' is stable on ' + str(self.stability.get(u, [])))
     unstable_roots = [u for u in self.reticulations if not self.is_reticulation(self.N.successors(u)[0]) and not self.is_stable(u)]
+    # if there are unstable roots, we cannot have component visibility
+    if unstable_roots:
+      self.unset_property('cv')
     self.log("unstable roots: " + str(unstable_roots))
     return unstable_roots
 
@@ -356,17 +361,18 @@ class PhyloNetwork:
     # contract all edges between reticulations
     parents_seen = dict()
     collective_indeg = dict()
-    X = set([self.root])
+    X = Queue.Queue()
+    X.put(self.root)
 
-    while X:
-      v = X.pop()
+    while not X.empty():
+      v = X.get_nowait()
       for s in self.N.successors(v):
         if self.is_reticulation(s):
           collective_indeg[s] = collective_indeg.get(s,0) \
                               + (collective_indeg[v] if self.is_reticulation(v) else 1)
         parents_seen[s] = parents_seen.get(s, 0) + 1
         if parents_seen[s] == self.N.in_degree(s):
-          X.add(s)
+          X.put(s)
     return max(collective_indeg.values())
 
 

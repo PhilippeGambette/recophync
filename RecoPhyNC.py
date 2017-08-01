@@ -822,7 +822,7 @@ class PhyloNetwork:
 
   
   def write_dot(self, filename):
-    networkx.write_dot(N, filename)
+    networkx.write_dot(self.N, filename)
 
 
 

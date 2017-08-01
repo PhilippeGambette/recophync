@@ -820,7 +820,9 @@ class PhyloNetwork:
     self.log('per block: ' + str(lists_per_block))
     return max([len(x) for x in lists_per_block]) if lists_per_block else 0
 
-
+  
+  def write_dot(self, filename):
+    networkx.write_dot(N, filename)
 
 
 
@@ -846,7 +848,7 @@ def main():
             with mean y (default: y = x/10)", dest='rand'
     )
     parser.add_argument(
-        '-o,--out', help="write graph to file in edgelist format", dest='out'
+        '-o,--out', help="write graph to file in graphviz dot format", dest='out'
     )
 
     arguments = parser.parse_args()
@@ -872,9 +874,7 @@ def main():
         line = "(random-" + str(PN.N.number_of_nodes()) + "-" + str(PN.N.number_of_edges()) + ")"
 
       if arguments.out:
-        with open(os.path.join(folder, arguments.out + ".graph"), "w") as graph_out:
-          for uv in PN.N.edges():
-            graph_out.write(str(uv[0]) + ' ' + str(uv[1]) + "\n")
+        PN.write_dot(os.path.join(folder, arguments.out))
 
       for short in ['r', 'lvl', 'rsi', 'ur', 'urb'] + network_types:
         line += PN.properties[short].report()

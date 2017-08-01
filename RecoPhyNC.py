@@ -617,11 +617,14 @@ class PhyloNetwork:
         childs_seen[p] = childs_seen.get(p, 0) + 1
         for j in reach[i]:
           if j not in reach[p]:
-            spread[j] = spread.get(j, 0) + 1
+            spread[j] += 1
           reach[p].add(j)
+
+      for p in self.N.predecessors(i):
         if childs_seen[p] == self.N.out_degree(p):
           X.put(p)
           self.stability[p] = set([x for x in reach[p] if spread[x] == 1])
+
       del reach[i]
       del childs_seen[i]
     #print "Time Stable vertices: "+str((datetime.datetime.now()-t0).microseconds)+"ms."
@@ -902,7 +905,7 @@ def main():
           line = "(random-" + str(PN.N.number_of_nodes()) + "-" + str(PN.N.number_of_edges()) + ")"
 
         if arguments.out:
-          PN.write_dot(os.path.join(folder, arguments.out + (data_file + '.dot' if arguments.dir else '') ))
+          PN.write_dot(os.path.join(folder, arguments.out + (os.path.basename(data_file) + '.dot' if arguments.dir else '') ))
 
         for short in ['r', 'lvl', 'rsi', 'ur', 'urb'] + network_types:
           line += PN.properties[short].report()

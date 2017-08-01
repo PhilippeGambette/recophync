@@ -7,6 +7,7 @@ import networkx
 import Queue
 import sys
 import random
+import glob
 
 #############################################################################
 # RecoPhyNC - recognizing phylogenetic networks classes
@@ -477,10 +478,17 @@ class PhyloNetwork:
   # network regularity (2 = binary, 0 = irregular)
   regular = None
 
+  # the property objects that will compute the properties
+  properties = dict()
 
   def __init__(self, _verbose = False):
     self.verbose = _verbose
     self.N = networkx.DiGraph()
+    self.root = None
+    self.reticulations = set()
+    self.leaves = set()
+    self.stability = dict()
+    self.regular = None
      # map short descriptions to functions checking classes
     self.properties = {'tc' : TreeChildProp('tree child', 'tc', self),
                        'ntc': NearlyTreeChildProp('nearly tree child','ntc', self),
@@ -501,7 +509,6 @@ class PhyloNetwork:
                        'rsi': MaxReticulationSubgraphIndegree('max #incoming edges to any reticulation component', 'rsi', self)
                       }
 
-
   # Input: log string
   # Effect: print log string if verbose flag is raised
   def log(self, s):
@@ -510,15 +517,19 @@ class PhyloNetwork:
 
 
   # Input: rooted network N, some vertex u
-  # Output: 0 if u is a reticulation, 1 if u is a tree vertex, 2 if u is a leaf, 3 if u is the root
+  # Output: the type of the node as string: 'root', 'leaf', 'tree', 'reticulation'
   def node_type(self, u):
-    return {
-        0: 'root',
-        1: 'leaf' if self.N.out_degree(u) == 0 else 'tree'
-        }.get(self.N.in_degree(u), 'reticulation')
+    ideg = self.N.in_degree(u)
+    if ideg == 1:
+      return 'leaf' if self.N.out_degree(u) == 0 else 'tree'
+    elif ideg > 1:
+      return 'reticulation'
+    else:
+      return 'root'
+
 
   def is_reticulation(self, v):
-    return self.N.out_degree(v) == 1
+    return self.N.in_degree(v) > 1
 
 
   def is_stable(self, v):
@@ -616,7 +627,10 @@ class PhyloNetwork:
     #print "Time Stable vertices: "+str((datetime.datetime.now()-t0).microseconds)+"ms."
     
     if self.verbose:
-      self.log('Stable vertices: ' + str([x for x in self.N.nodes() if self.is_stable(x) ]))
+      self.log('stability:')
+      for u in self.stability:
+        if self.is_stable(u):
+          self.log(str(u) + ': ' + str(self.stability[u]))
 
       
 
@@ -637,7 +651,7 @@ class PhyloNetwork:
         if self.root is None:
           self.root = i
         else:
-          raise DegreeError("more than one root in the network: " + str(i) + " & " + str(root))
+          raise DegreeError("more than one root in the network: " + str(i) + " & " + str(self.root))
       else:
         if outdeg > 0:
           if self.regular is None:
@@ -840,6 +854,10 @@ def main():
         '-f','--file', type=str, help='the data file to analyze', dest='file'
     )
     parser.add_argument(
+        '-d','--dir', type=str, help='directory/folder of data files to analyze', dest='dir'
+    )
+
+    parser.add_argument(
         '-v','--verbose', action='store_true', help="verbose mode", dest='verbose'
     )
     parser.add_argument(
@@ -848,39 +866,50 @@ def main():
             with mean y (default: y = x/10)", dest='rand'
     )
     parser.add_argument(
-        '-o','--out', help="write graph to file in graphviz dot format", dest='out'
+        '-o','--out', help="write graph to file in graphviz dot format; if --dir is given, then the data filename and '.dot' are prepended.", dest='out'
     )
 
     arguments = parser.parse_args()
 
-    if not arguments.file and not arguments.rand:
-      print "invalid arguments: need either --file or --rand, check --help for information"
+    if sum([bool(arguments.file), bool(arguments.dir), bool(arguments.rand)]) != 1:
+      print "Invalid arguments! I need EXACTLY one of --file, --dir, and --rand. Check --help for more information."
       return
 
-    folder = os.path.abspath(os.path.dirname(arguments.file if arguments.file else sys.argv[0]))
-    
+    file_list = ''
+    if arguments.dir:
+      folder = os.path.abspath(os.path.dirname(arguments.dir))
+      file_list = glob.glob(os.path.join(folder, "*"))
+    elif arguments.file:
+      folder = os.path.abspath(os.path.dirname(arguments.file))
+      file_list = [arguments.file]
+    else:
+      folder = os.path.abspath(os.path.dirname(sys.argv[0]))
+      file_list = [0]
+
     # read all data files in specified folder and classify networks -----------
     with open(os.path.join(folder, "results2.csv"),"a") as output:
-      PN = PhyloNetwork(arguments.verbose)
-      # network initialization and preprocessing
+      for data_file in file_list:
+        PN = PhyloNetwork(arguments.verbose)
 
-      line = ''
-      if arguments.file:
-        PN.open(arguments.file)
-        line = arguments.file
-      elif arguments.rand:
-        rand_args = [int(x) for x in arguments.rand.split(',')]
-        PN.create_binary(rand_args[0], rand_args[1] if len(rand_args) > 1 else rand_args[0]/10)
-        line = "(random-" + str(PN.N.number_of_nodes()) + "-" + str(PN.N.number_of_edges()) + ")"
+        line = ''
+        if data_file:
+          print "working on ", data_file
+          PN.open(data_file)
+          line = os.path.basename(data_file)
+        else:
+          rand_args = [int(x) for x in arguments.rand.split(',')]
+          PN.create_binary(rand_args[0], rand_args[1] if len(rand_args) > 1 else rand_args[0]/10)
+          line = "(random-" + str(PN.N.number_of_nodes()) + "-" + str(PN.N.number_of_edges()) + ")"
 
-      if arguments.out:
-        PN.write_dot(os.path.join(folder, arguments.out))
+        if arguments.out:
+          PN.write_dot(os.path.join(folder, arguments.out + (data_file + '.dot' if arguments.dir else '') ))
 
-      for short in ['r', 'lvl', 'rsi', 'ur', 'urb'] + network_types:
-        line += PN.properties[short].report()
+        for short in ['r', 'lvl', 'rsi', 'ur', 'urb'] + network_types:
+          line += PN.properties[short].report()
 
-      # write information about the network
-      output.write(line + "\n")
+        # write information about the network
+        output.write(line + "\n")
+
 
 
 if __name__ == '__main__':

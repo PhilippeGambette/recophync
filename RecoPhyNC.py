@@ -848,7 +848,7 @@ def main():
             with mean y (default: y = x/10)", dest='rand'
     )
     parser.add_argument(
-        '-o,--out', help="write graph to file in graphviz dot format", dest='out'
+        '-o','--out', help="write graph to file in graphviz dot format", dest='out'
     )
 
     arguments = parser.parse_args()

@@ -73,6 +73,388 @@ class DegreeError(ValueError):
     self.args = {arg}
 
 
+class NetworkProperty:
+  # long description of the property
+  short = None
+
+  # short abbreviation of the property
+  long = None
+
+  # pointer to the host network the property is of
+  network = None
+
+  # the actual value of the property (or None if not yet computed)
+  val = None
+
+  # a logging function
+  log = None
+
+  # NOTE: the actual computation of the value is done in self.check() which is not implemented in this class.
+  #       Each child class is supposed to implement their own check()
+
+  def __init__(self, _long, _short, _network):
+    self.long = _long
+    self.short = _short
+    self.network = _network
+    self.log = _network.log
+
+  # set the value
+  def set(self, _val = True):
+    if self.val != _val:
+      self.log('setting ' + self.long + ' to ' + str(_val))
+      self.val = _val
+      if _val:
+        for impl in positive_implications.get(self.short, []):
+          self.network.properties[impl].set()
+      else:
+        for impl in negative_implications.get(self.short, []):
+          self.network.properties[impl].unset()
+
+  # unset the value
+  def unset(self):
+    self.set(False)
+
+
+  # sets the value only if it has not been previously set
+  def set_if_none(self, _val = True):
+    if self.val is None:
+      self.val = _val
+
+
+  # get the value of the property, computing it if needed (using self.check())
+  def get(self):
+    if self.val is None:
+      self.check()
+    return self.val
+
+
+  # conversion to bool
+  def __nonzero__(self):
+    return self.get()
+
+
+  # report about a property
+  def report(self):
+    self.log("=== N is " + vocalize[self.get()] + self.long + " ===")
+    return ";" + vocalize[self.get()] + self.short
+
+
+
+class NumericalNetworkProperty(NetworkProperty):
+  # report about a value
+  def report(self):
+    self.log("=== " + self.long + ": " + str(self.get()) + " ===")
+    return ";" + str(self.get())   
+
+
+
+# ======================= boolean properties ===========================
+
+
+class TreeBasedProp(NetworkProperty):
+  # Input: none
+  # Output: True if N is tree-based
+  # NOTE: we use the characterization of Francis, Semple, Steel, Arxiv'16
+  from networkx.algorithms import bipartite
+  def check(self):
+    network = self.network
+    N = network.N
+    # step 1: build G_N
+    B = networkx.Graph()
+    B.add_nodes_from([str(x)+'a' for x in N.nodes()], bipartite=0)
+    B.add_nodes_from([str(x)+'b' for x in N.nodes()], bipartite=1)
+    B.add_edges_from([(str(x)+'a', str(y)+'b') for (x,y) in N.edges()])
+
+    # step 2: check if G_N has a matching of size |V| - |X|
+    match = networkx.bipartite.maximum_matching(B)
+    self.log("found matching of size " + str(len(match)/2) + ": " + str(match) + " (" + str(N.number_of_nodes() - len(network.leaves)) + " necessary for tree-based)")
+
+    self.set(len(match) / 2 == N.number_of_nodes() - len(network.leaves))
+
+
+class TreeChildProp(NetworkProperty):
+  # Input: rooted network N
+  # Output: True if N is tree-child, False otherwise
+  def check(self):
+    network = self.network
+    successors = network.N.successors_iter
+    for nonleaf in (v for v, degree in network.N.out_degree_iter() if degree):
+        treechildNode = any(network.N.in_degree(c) == 1 for c in successors(nonleaf))
+        if not treechildNode:
+            self.log(str(nonleaf) + " is not treechild.")
+            self.unset()
+            if not network.verbose:
+              return False
+    self.set_if_none()
+
+
+class NestedProp(NetworkProperty):
+  # Output: True if N is nested, False otherwise
+  def check(self):
+    pass
+    #TODO: write me
+
+
+class GalledTreeProp(NetworkProperty):
+  # Output: True if N is a galled tree, False otherwise
+  def check(self):
+    self.set(self.network.compute_level() == 1)
+
+
+class TreeSiblingProp(NetworkProperty):
+  # Output: True if N is tree-child, False otherwise
+  def check(self):
+    network = self.network
+    N = network.N
+    predecessors = N.predecessors_iter
+    successors = N.successors_iter
+    for v in network.reticulations:
+        # for each reticulation vertex, we build its set of siblings S
+        tree_siblings = [c for p in predecessors(v) for c in successors(p) if not network.is_reticulation(c)]
+        # we check if S contains at least one tree vertex
+        if tree_siblings:
+          self.log(str(v) + " has tree siblings: " + str(tree_siblings))
+        else:
+          self.log(str(v) + " is not tree-sibling.")
+          self.unset()
+          if not network.verbose:
+            return False
+    self.set_if_none()
+
+
+class ReticulationVisibleProp(NetworkProperty):
+  # Input: a rooted phylogenetic network N
+  # Output: True if N is reticulation visible, False otherwise
+  def check(self):
+    network = self.network
+    for v in network.reticulations:
+      if not network.is_stable(v):
+        self.log(str(v) + " is not stable.")
+        self.unset()
+        if not network.verbose:
+          return False
+      else:
+        self.log(str(v) + " is stable on " + str(network.stability.get(v, set())))
+    self.set_if_none()
+
+
+class NearlyStableProp(NetworkProperty):
+  # Input: a rooted phylogenetic network N
+  # Output: True if N is reticulation visible, False otherwise
+  def check(self):
+    network = self.network
+    N = network.N
+    predecessors = N.predecessors_iter
+    for v in N:
+      if v != network.root:
+        if not network.is_stable(v):
+          self.log(str(v) + " is not stable.")
+
+          unstable_parents = [p for p in predecessors(v) if not network.is_stable(p)]
+
+          if unstable_parents:
+            self.log("Unstable parents of " + str(v) + ": " + str(unstable_parents))
+            self.unset()
+            if not network.verbose:
+              return False
+          else:
+            self.log("All parents of " + str(v) + " are stable.")
+        else:
+          self.log(str(v) + " is stable.")
+    self.set_if_none()
+
+
+class ComponentVisibleProp(NetworkProperty):
+  # Input: a rooted phylogenetic network N
+  # Output: True if N is component visible, False otherwise
+  def check(self):
+    network = self.network
+    successors = network.N.successors_iter
+    for v in network.reticulations:
+      s = successors(v)[0]
+      if not network.is_reticulation(s) and not network.is_stable(s):
+        self.log(str(s) + " is an unstable component root.")
+        self.unset()
+        if not network.verbose:
+          return False
+      else:
+        self.log(str(s) + " is stable on " + str(network.stability.get(s, [])))
+    self.set_if_none()
+
+
+class CompressedProp(NetworkProperty):
+  # Input: a rooted phylogenetic network N
+  # Output: True if N is compressed, false otherwise
+  def check(self):
+    network = self.network
+    predecessors = network.N.predecessors_iter
+    for r in network.reticulations:
+      for p in predecessors(r):
+        if network.is_reticulation(p):
+          self.log("Not compressed: parent " + str(p) + \
+                   " of reticulation " + str(r) + \
+                   " is also a reticulation.")
+          self.unset()
+          if not network.verbose:
+            return False
+    self.set_if_none()
+
+
+class NearlyTreeChildProp(NetworkProperty):
+  # input: a vertex and a dict to True/False
+  # output: True <=> v has a tree path in N (saving everyone between in the dict)
+  def check_TP(self, v, has_TP):
+    if not self.network.is_reticulation(v):
+      if v in has_TP:
+        return has_TP[v]
+      for i in self.network.N.successors(v):
+        has_TP[v] = self.check_TP(i, has_TP)
+        if has_TP[v]:
+          return True
+    return False
+
+  # Input: a rooted phylogenetic network N
+  # Output: True if N is nearly tree-child, false otherwise
+  def check(self):
+    network = self.network
+    predecessors = network.N.predecessors_iter
+    has_TP = dict([(next(predecessors(v)),True) for v in network.leaves])
+    
+    for r in network.reticulations:
+      for p in predecessors(r):
+        if not network.is_reticulation(p):
+          if self.check_TP(p, has_TP):
+            self.log(str(p) + " has a tree path.")
+          else:
+            self.log(str(p) + " has no tree path.")
+            self.unset()
+            if not network.verbose:
+              return False
+    self.set_if_none()
+
+
+class GeneticallyStableProp(NetworkProperty):
+  # Input: none
+  # Output: True if N is genetically stable, False otherwise
+  def check(self):
+    network = self.network
+    predecessors = network.N.predecessors_iter
+    for r in network.reticulations:
+      self.log("Testing if " + str(r) + " is stable.")
+      if network.is_stable(r):
+        self.log(str(r) + " is stable, testing if its parents are stable.")
+        stable_parents = [x for x in predecessors(r) if network.is_stable(x)]
+        self.log("Stable parents of " + str(r) + ": " + str(stable_parents))
+        if len(stable_parents) == 0:
+          self.unset()
+          if not network.verbose:
+            return False
+      else:
+        self.unset()
+        if not network.verbose:
+          return False
+    self.set_if_none()
+
+
+
+
+# ======================= numerical properties ===========================
+
+class NumReticulations(NumericalNetworkProperty):
+  def check(self):
+    self.set(len(self.network.reticulations))
+
+
+class Level(NumericalNetworkProperty):
+  def check(self):
+    self.set(self.network.max_per_block(self.network.reticulations))
+
+
+class NumUnstableRoots(NumericalNetworkProperty):
+  unstable_roots = None
+
+  # output: the list of unstable component roots in N
+  def compute_unstable_roots(self):
+    network = self.network
+    successors = network.N.successors_iter
+
+    self.unstable_roots = set()
+    for u in network.reticulations:
+      if not network.is_stable(u):
+        v = next(successors(u))
+        if not network.is_reticulation(v):
+          self.unstable_roots.add(v)
+    # if there are unstable roots, we cannot have component visibility
+    self.log("unstable roots: " + str(self.unstable_roots))
+    network.properties['cv'].set(not self.unstable_roots)
+    self.set(not self.unstable_roots)
+
+  # output: the number of unstable component roots in N
+  def check(self):
+    if self.unstable_roots is None:
+      self.compute_unstable_roots()
+    self.set(len(self.unstable_roots))
+
+
+class NumUnstableRootsPerBlock(NumericalNetworkProperty):
+  def check(self):
+    # compute unstable component roots
+    network = self.network
+    uc = network.properties['ur']
+    
+    uc.check()
+    self.set(network.max_per_block(uc.unstable_roots))
+
+
+class NestedDepth(NumericalNetworkProperty):
+  # Input: binary rooted network N
+  # Output: -1 if not nested, nested depth otherwise
+  # TODO: Does not work yet
+  def check(self):
+      """Returns the nested depth of a rooted binary network N, or -1 if N is not
+       nested.
+      """
+      biconn_comp = networkx.biconnected_components(self.network.N.to_undirected())
+      for B in biconn_comp:
+          # compute the nested depth of each biconnected component
+          for node in B:
+              print node
+              #...
+
+
+# the highest number of incoming arcs in N into any connected component of N[R]
+# or 0 if R (set of reticulations) is empty
+class MaxReticulationSubgraphIndegree(NumericalNetworkProperty):
+  def check(self):
+    # contract all edges between reticulations
+    network = self.network
+    successors = network.N.successors_iter
+
+    parents_seen = dict()
+    collective_indeg = dict()
+    X = Queue.Queue()
+    X.put(network.root)
+
+    while not X.empty():
+      v = X.get_nowait()
+      for s in successors(v):
+        if network.is_reticulation(s):
+          collective_indeg[s] = collective_indeg.get(s,0) \
+                              + (collective_indeg[v] if network.is_reticulation(v) else 1)
+        parents_seen[s] = parents_seen.get(s, 0) + 1
+        if parents_seen[s] == network.N.in_degree(s):
+          X.put(s)
+    return max(collective_indeg.values() or [0])
+
+
+
+
+
+
+
+# ======================= main class ===========================
+
+
 class PhyloNetwork:
   # whether or not verbose output is required
   verbose = None
@@ -83,35 +465,49 @@ class PhyloNetwork:
   # the root of the network
   root = None
 
-  #list of reticulations
+  # set of reticulations
   reticulations = set()
 
-  # list of leaves
-  leaves = []
+  # set of leaves
+  leaves = set()
 
-  # an array mapping each vertex to the set of leaves it is stable on
+  # a dict mapping each vertex to the set of leaves it is stable on
   stability = dict()
 
   # network regularity (2 = binary, 0 = irregular)
   regular = None
 
-  # store identified classes and useful properties in a dictionary,
-  # so we can use previously acquired knowledge to speed things up
-  # (i.e., if we know that N is tree-child, then we know it's also
-  # nearly tree-child so no need to ask a function for the result)
-  properties = dict()
-
 
   def __init__(self, _verbose = False):
     self.verbose = _verbose
     self.N = networkx.DiGraph()
-    self.properties = dict()
-  
+     # map short descriptions to functions checking classes
+    self.properties = {'tc' : TreeChildProp('tree child', 'tc', self),
+                       'ntc': NearlyTreeChildProp('nearly tree child','ntc', self),
+                       'gs' : GeneticallyStableProp('genetically stable','gs', self),
+                       'ts' : TreeSiblingProp('tree sibling','ts', self),
+                       'rv' : ReticulationVisibleProp('reticulation visible','rv', self),
+                       'cv' : ComponentVisibleProp('component visible','cv', self),
+                       'cp' : CompressedProp('compressed', 'cp', self),
+                       'ns' : NearlyStableProp('nearly stable', 'ns', self),
+                       'gt' : GalledTreeProp('galled tree', 'gt', self),
+                       'tb' : TreeBasedProp('tree based','tb', self),
+                       # numerical properties
+                       'r'  : NumReticulations('#reticulations', 'r', self),
+                       'lvl': Level('level', 'lvl', self),
+                       'nd' : NestedDepth('nested depth', 'nd', self),
+                       'ur' : NumUnstableRoots('#unstable component roots', 'ur', self),
+                       'urb': NumUnstableRootsPerBlock('#unstable components roots per block', 'urb', self),
+                       'rsi': MaxReticulationSubgraphIndegree('max #incoming edges to any reticulation component', 'rsi', self)
+                      }
+
+
   # Input: log string
   # Effect: print log string if verbose flag is raised
   def log(self, s):
     if self.verbose:
       print s
+
 
   # Input: rooted network N, some vertex u
   # Output: 0 if u is a reticulation, 1 if u is a tree vertex, 2 if u is a leaf, 3 if u is the root
@@ -124,19 +520,50 @@ class PhyloNetwork:
   def is_reticulation(self, v):
     return self.N.out_degree(v) == 1
 
+
   def is_stable(self, v):
     if self.node_type(v) == 'leaf':
       return True
     else:
       return self.stability.get(v, False)
 
+
+  # Input: some edge uv
+  # Effect: contract uv in N unto v
+  def contract_edge(self, uv, delete_node = True):
+    u = uv[0]
+    v = uv[1]
+    self.N.remove_edge(u,v)
+    self.N.add_edges_from([(v,w) for w in self.N.successors(u)])
+    self.N.add_edges_from([(w,v) for w in self.N.predecessors(u)])
+    if delete_node:
+      self.N.remove_node(u)
+    else:
+      self.N.remove_edges_from([(u,w) for w in self.N.successors(u)])
+      self.N.remove_edges_from([(w,u) for w in self.N.predecessors(u)])
+
+  # Input: a vertex u
+  # Effect: replace u with the join of predecessors(u) with successors(u)
+  # NOTE: this will turn length-2 cycles into loops
+  def shortcut_over(u):
+    for v in self.N.predecessors(u):
+      for w in self.N.successors(u):
+        self.N.add_edge(v,w)
+    self.N.remove_node(u)
+
+  # Input: edge (u,v)
+  # Output: subdivide uv and return the new vertex w, as well as a list of new edges
+  def subdivide(self, uv):
+    w = self.N.number_of_nodes()
+    new_edges = [(uv[0],w),(w,uv[1])]
+    self.N.remove_edge(uv[0], uv[1])
+    self.N.add_edges_from(new_edges)
+    return w, new_edges
+
+
   # Input: a rooted phylogenetic network N
   # Output: N where each indegree and outdegre 1 vertex is contracted with its parent
   def _contract(self):
-    """
-    :return:
-    """
-
     X = set(self.N.nodes()) #NOTE: we need a set here to avoid having a node multiple times in the queue
     while X:
       v = X.pop()
@@ -149,6 +576,7 @@ class PhyloNetwork:
         self.N.remove_node(v)
         X.add(u)
         X.add(w)
+
 
   # input: none
   # task: fill stability relation for all non-leaves
@@ -219,7 +647,7 @@ class PhyloNetwork:
       if indeg > 1:
         self.reticulations.add(i)
       if outdeg == 0:
-        self.leaves.append(i)
+        self.leaves.add(i)
     if self.root is None:
       raise DegreeError("no root in network")
 
@@ -246,14 +674,6 @@ class PhyloNetwork:
     self._update_infos()
     self._update_stable()
 
-  # Input: edge (u,v)
-  # Output: subdivide uv and return the new vertex w, as well as a list of new edges
-  def subdivide(self, uv):
-    w = self.N.number_of_nodes()
-    new_edges = [(uv[0],w),(w,uv[1])]
-    self.N.remove_edge(uv[0], uv[1])
-    self.N.add_edges_from(new_edges)
-    return w, new_edges
 
   # Input: n, regularity
   # Effect: create regular spanning tree on n vertices if possible
@@ -272,25 +692,6 @@ class PhyloNetwork:
         current_leaves.append(index)
     return current_leaves
 
-  # Input: list of node types
-  # Output: a random node of this type if include = True, otherwise a random node not of this type
-  def random_node(self, allowed_types, include = True):
-    rand = random.Random()
-    u = rand.randint(0, self.N.number_of_nodes() - 1)
-    while (self.node_type(u) in allowed_types) != include:
-      u = rand.randint(0, self.N.number_of_nodes() - 1)
-    return u
-
-  # Input: m
-  # Output: m edges picked uniformly at random
-  def random_edges(self, num_edges):
-    m = self.N.number_of_edges()
-    if num_edges > m:
-      raise ValueError('not enough edges in the network')
-    
-    rand = random.Random()
-    return rand.sample(self.N.edges(), num_edges)
-    
 
   # Input: n
   # Effect: create a random BINARY network with n nodes & reticulation number distributed exponentially with mean r_mean
@@ -337,8 +738,6 @@ class PhyloNetwork:
       self.N.add_edge(w[0], w[1])
       edges.append((w[0], w[1]))
 
-
-    
     self._update_infos()
     self._update_stable()
 
@@ -355,44 +754,36 @@ class PhyloNetwork:
     if n + contractions % 2 == 0:
       contractions += 1
 
-    # step 0: create random binary network with n + non_binary nodes
+    # step 0: create random binary network with n + contractions nodes
     self.create_binary(n + contractions, r_mean)
 
     # step 1: contract 'contractions' edges in N
-    # keep an eye on vertices with both in- and out-degree > 1. They will be uncontracted later
+    # NOTE: we need to keep an eye on vertices with both in- and out-degree > 1. They will be uncontracted later
     invalid_nodes = set()
-    for i in xrange(contractions):
-      u = rand.randint(0, self.N.number_of_nodes())
-      
-      
+    edges = set(self.N.edges())
+    i = 0
+    while i < contractions + len(invaild_nodes):
+      e = rand.randint(0, len(edges) - 1)
+      if e[0] in invalid_nodes:
+        invalid_nodes.discard(e[0])
+        invalid_nodes.add(e[1])
+      elif e[1] not in invalid_nodes:
+        if self.is_reticulation(e[0]) != self.is_reticulation(e[1]):
+          invalid_nodes.add(e[1])
+      self.contract_edge(e)
+
+    # step 2: uncontract invalid nodes
+    for u in invalid_nodes:
+      v = self.N.add_node()
+      succ = self.N.successors(u)
+      for w in succ:
+        self.N.remove_edge(u, w)
+        self.N.add_edge(v, w)
+      self.N.add_edge(u, v)
 
     self._update_infos()
     self._update_stable()
      
-
-
-  # Input: some edge uv
-  # Effect: contract uv in N
-  def contractEdge(self, uv, deleteNode = True):
-    u = uv[0]
-    v = uv[1]
-    self.N.remove_edge(u,v)
-    self.N.add_edges_from([(v,w) for w in self.N.successors(u)])
-    self.N.add_edges_from([(w,v) for w in self.N.predecessors(u)])
-    if deleteNode:
-      self.N.remove_node(u)
-    else:
-      self.N.remove_edges_from([(u,w) for w in self.N.successors(u)])
-      self.N.remove_edges_from([(w,u) for w in self.N.predecessors(u)])
-
-  # Input: a vertex u
-  # Effect: replace u with the join of predecessors(u) with successors(u)
-  # NOTE: this will turn length-2 cycles into loops
-  def shortcut_over(u):
-    for v in self.N.predecessors(u):
-      for w in self.N.successors(u):
-        self.N.add_edge(v,w)
-    self.N.remove_node(u)
 
 
   # ===================== computing values =========================
@@ -405,10 +796,10 @@ class PhyloNetwork:
   # Input: a type t (0,1,2,3)
   # Output: list of vertices of N of type t
   def count_nodes(self, t):
-    if self.regular:
-      if t == 'root':
-        return 1
-      else:
+    if t == 'root':
+      return 1
+    else:
+      if self.regular:
         # we consider the root to be a tree node
         n = self.N.number_of_nodes()
         m = self.N.number_of_edges()
@@ -418,27 +809,8 @@ class PhyloNetwork:
         return {'leaf': leaf,
                 'tree': tree,
                 'reticulation': retis}.get(t, 0)
-    else:
-      return len(self.get_nodes(t))
-
-  # Output: #reticulations
-  def count_reticulations(self):
-    return self.count_nodes('reticulation')
-
-  # output: the list of unstable component roots in N
-  def list_unstable_components(self):
-    for u in self.reticulations:
-      if self.node_type(self.N.successors(u)[0]) == 'tree':
-        self.log('component-root ' + str(u) + ' is stable on ' + str(self.stability.get(u, [])))
-    unstable_roots = set([u for u in self.reticulations if not self.is_reticulation(self.N.successors(u)[0]) and not self.is_stable(u)])
-    # if there are unstable roots, we cannot have component visibility
-    self.set_property('cv', not unstable_roots)
-    self.log("unstable roots: " + str(unstable_roots))
-    return unstable_roots
-
-  # output: the number of unstable component roots in N
-  def count_unstable_components(self):
-    return len(self.list_unstable_components())
+      else:
+        return len(self.get_nodes(t))
 
   # input: a list of nodes
   # output: the size of the largest sublist that intersects a block in N
@@ -448,366 +820,8 @@ class PhyloNetwork:
     self.log('per block: ' + str(lists_per_block))
     return max([len(x) for x in lists_per_block]) if lists_per_block else 0
 
-  # Input: binary rooted network N
-  # Output: level of N
-  def compute_level(self):
-    return self.max_per_block(self.reticulations)
-
-  # output: the number of unstable component roots in N
-  def count_ucr_per_block(self):
-    return self.max_per_block(self.list_unstable_components())
 
 
-  # output: the highest number of vertices per block that are unstable component roots in N
-  def compute_ucr_per_block(self):
-    return self.max_per_block(set(self.list_unstable_components()))
-
-
-  # Input: binary rooted network N
-  # Output: -1 if not nested, nested depth otherwise
-  # Does not work yet
-  def compute_nested_depth():
-      """Returns the nested depth of a rooted binary network N, or -1 if N is not
-       nested.
-
-      :rtype : int
-      """
-      biconn_comp = networkx.biconnected_components(self.N.to_undirected())
-      for B in biconn_comp:
-          # compute the nested depth of each biconnected component
-          for node in B:
-              print node
-              #...
-      return -1
-
-  # output: the highest number of incoming arcs into any connected component in N[R]
-  def max_reti_subgraph_indeg(self):
-    # contract all edges between reticulations
-    parents_seen = dict()
-    collective_indeg = dict()
-    X = Queue.Queue()
-    X.put(self.root)
-
-    while not X.empty():
-      v = X.get_nowait()
-      for s in self.N.successors(v):
-        if self.is_reticulation(s):
-          collective_indeg[s] = collective_indeg.get(s,0) \
-                              + (collective_indeg[v] if self.is_reticulation(v) else 1)
-        parents_seen[s] = parents_seen.get(s, 0) + 1
-        if parents_seen[s] == self.N.in_degree(s):
-          X.put(s)
-    return max(collective_indeg.values() or [0])
-
-
-  # map short descriptions to functions computing values
-  short_to_val = {'ret': ('#reticulations', count_reticulations),
-                  'lvl': ('level', compute_level),
-                  'rcl': ('max incoming arcs into any reticulation component', max_reti_subgraph_indeg),
-                  'uc' : ('#unstable components', count_unstable_components),
-                  'ucb': ('#unstable component roots / block', count_ucr_per_block)
-                 }
-
-  # report about a value
-  def report_value(self, short):
-    description = self.short_to_val[short][0]
-    val = self.short_to_val[short][1](self)
-    self.log("=== " + description + ": " + str(val) + " ===")
-    return ";" + str(val)   
-
-
-  # ===================== checking properties =========================
-
-  def set_property(self, prop, val = True):
-    self.properties[prop] = val
-    if val:
-      for impl in positive_implications.get(prop, []):
-        if impl not in self.properties:
-          self.log('deriving ' + impl + ' from ' + prop)
-          self.set_property(impl, True)
-    else:
-      for impl in negative_implications.get(prop, []):
-        if impl not in self.properties:
-          self.log('deriving not-' + impl + ' from not-' + prop)
-          self.set_property(impl, False)
-
-  def unset_property(self, prop):
-    self.set_property(prop, False)
-
-  # Input: rooted network N
-  # Output: True if N is tree-child, False otherwise
-  def is_tree_child(self):
-    """
-    :return:
-    """
-    if 'tc' in self.properties:
-      return self.properties['tc']
-
-    successors = self.N.successors_iter
-    for nonleaf in (v for v, degree in self.N.out_degree_iter() if degree):
-        treechildNode = any(self.N.in_degree(c) == 1 for c in successors(nonleaf))
-        if not treechildNode:
-            self.log(str(nonleaf) + " is not treechild.")
-            self.unset_property('tc')
-            if not self.verbose:
-              return False
-    if 'tc' not in self.properties:
-      self.set_property('tc')
-      return True
-    else:
-      return False
-
-  # Output: True if N is nested, False otherwise
-  def is_nested(self):
-    pass
-    #TODO: write me
-
-  # Output: True if N is a galled tree, False otherwise
-  def is_galled_tree(self):
-    if 'gt' in self.properties:
-      return self.properties['gt']
-    else:
-      result = (self.compute_level() == 1)
-      self.set_property('gt', result)
-      return result
-
-  # Output: True if N is tree-child, False otherwise
-  def is_tree_sibling(self):
-    """
-    :return:
-    """
-
-    if 'ts' in self.properties:
-      return self.properties['ts']
-
-    predecessors = self.N.predecessors_iter
-    successors = self.N.successors_iter
-    for v in self.reticulations:
-        # for each reticulation vertex, we build its set of siblings S
-        tree_siblings = [c for p in predecessors(v) for c in successors(p) if not self.is_reticulation(c)]
-        # we check if S contains at least one tree vertex
-        if tree_siblings:
-          self.log(str(v) + " has tree siblings: " + str(tree_siblings))
-        else:
-          self.log(str(v) + " is not tree-sibling.")
-          self.unset_property('ts')
-          if not self.verbose:
-            return False
-    if not 'ts' in self.properties:
-      self.set_property('ts')
-      return True
-    else:
-      return False
-
-  # Input: a rooted phylogenetic network N
-  # Output: True if N is reticulation visible, False otherwise
-  def is_reticulation_visible(self):
-    """
-    :return:
-    """
-
-    if 'rv' in self.properties:
-      return self.properties['rv']
-
-    for v in self.reticulations:
-      if not self.is_stable(v):
-        self.log(str(v) + " is not stable.")
-        self.unset_property('rv')
-        if not self.verbose:
-          return False
-      else:
-        self.log(str(v) + " is stable on " + str(self.stability.get(v, set())))
-    if not 'rv' in self.properties:
-      self.set_property('rv')
-      return True
-    else:
-      return False
-
-
-
-  # Input: a rooted phylogenetic network N
-  # Output: True if N is reticulation visible, False otherwise
-  def is_nearly_stable(self):
-    if 'ns' in self.properties:
-      return self.properties['ns']
-
-    # skipping dots may improve speed
-    predecessors = self.N.predecessors_iter
-    for v in self.N:
-      if v != self.root:
-        if not self.is_stable(v):
-          self.log(str(v) + " is not stable.")
-
-          unstable_parents = [p for p in predecessors(v) if not self.is_stable(p)]
-
-          if unstable_parents:
-            self.log("Unstable parents of " + str(v) + ": " + str(unstable_parents))
-            self.unset_property('ns')
-            if not self.verbose:
-              return False
-          else:
-            self.log("All parents of " + str(v) + " are stable.")
-        else:
-          self.log(str(v) + " is stable.")
-    if not 'ns' in self.properties:
-      self.set_property('ns')
-      return True
-    else:
-      return False
-
-  # Input: a rooted phylogenetic network N
-  # Output: True if N is component visible, False otherwise
-  def is_component_visible(self):
-    if 'cv' in self.properties:
-      return self.properties['cv']
-
-    for v in self.reticulations:
-      s = self.N.successors(v)[0]
-      if not self.is_reticulation(s) and not self.is_stable(s):
-        self.log(str(s) + " is an unstable component root.")
-        self.unset_property('cv')
-        if not self.verbose:
-          return False
-      else:
-        self.log(str(s) + " is stable on " + str(self.stability.get(s, [])))
-    if not 'cv' in self.properties:
-      self.set_property('cv')
-      return True
-    else:
-      return False
-
-
-  # Input: a rooted phylogenetic network N
-  # Output: True if N is compressed, false otherwise
-  def is_compressed(self):
-    """Returns True if network N is compressed, False otherwise."""
-
-    if 'cp' in self.properties:
-      return self.properties['cp']
-
-    # skipping dots may improve speed
-    predecessors = self.N.predecessors_iter
-    for r in self.reticulations:
-      for p in predecessors(r):
-        if self.is_reticulation(p):
-          self.log("Not compressed: parent " + str(p) + \
-                   " of reticulation " + str(r) + \
-                   " is also a reticulation.")
-          self.unset_property('cp')
-          if not self.verbose:
-            return False
-    if not 'cp' in self.properties:
-      self.set_property('cp')
-      return True
-    else:
-      return False
-
-  # input: a vertex and a dict to True/False
-  # output: True <=> v has a tree path in N (saving everyone between in the dict)
-  def check_TC(self, v, has_TC):
-    if not self.is_reticulation(v):
-      if v in has_TC:
-        return has_TC[v]
-      for i in self.N.successors(v):
-        has_TC[v] = self.check_TC(i, has_TC)
-        if has_TC[v]:
-          return True
-    return False
-
-  # Input: a rooted phylogenetic network N
-  # Output: True if N is nearly tree-child, false otherwise
-  def is_nearly_treechild(self):
-    if 'ntc' in self.properties:
-      return self.properties['ntc']
-
-    has_TC = dict([(self.N.predecessors(v)[0],True) for v in self.leaves])
-    
-    for r in self.reticulations:
-      for p in self.N.predecessors(r):
-        if not self.is_reticulation(p):
-          if self.check_TC(p, has_TC):
-            self.log(str(p) + " has a tree path.")
-          else:
-            self.log(str(p) + " has no tree path.")
-            self.unset_property('ntc')
-            if not self.verbose:
-              return False
-    if not 'ntc' in self.properties:
-      self.set_property('ntc')
-      return True
-    else:
-      return False
-
-
-  # Input: none
-  # Output: True if N is genetically stable, False otherwise
-  def is_genetically_stable(self):
-    if 'gs' in self.properties:
-      return self.properties['gs']
-
-    predecessors = self.N.predecessors_iter
-    for r in self.reticulations:
-      self.log("Testing if " + str(r) + " is stable.")
-      if self.is_stable(r):
-        self.log(str(r) + " is stable, testing if its parents are stable.")
-        stable_parents = [x for x in predecessors(r) if self.is_stable(x)]
-        self.log("Stable parents of " + str(r) + ": " + str(stable_parents))
-        if len(stable_parents) == 0:
-          self.unset_property('gs')
-          if not self.verbose:
-            return False
-      else:
-        self.unset_property('gs')
-        if not self.verbose:
-          return False
-    if not 'gs' in self.properties:
-      self.set_property('gs')
-      return True
-    else:
-      return False
-
-
-  # Input: none
-  # Output: True if N is tree-based
-  # NOTE: we use the characterization of Francis, Semple, Steel, Arxiv'16
-  from networkx.algorithms import bipartite
-  def is_tree_based(self):
-    if 'tb' in self.properties:
-      return self.properties['tb']
-
-    # step 1: build G_N
-    B = networkx.Graph()
-    B.add_nodes_from([str(x)+'a' for x in self.N.nodes()], bipartite=0)
-    B.add_nodes_from([str(x)+'b' for x in self.N.nodes()], bipartite=1)
-    B.add_edges_from([(str(x)+'a', str(y)+'b') for (x,y) in self.N.edges()])
-
-    # step 2: check if G_N has a matching of size |V| - |X|
-    match = networkx.bipartite.maximum_matching(B)
-    self.log("found matching of size " + str(len(match)/2) + ": " + str(match) + " (" + str(self.N.number_of_nodes() - len(self.leaves)) + " necessary for tree-based)")
-
-    result = (len(match) / 2 == self.N.number_of_nodes() - len(self.leaves))
-    self.set_property('tb', result)
-    return result
-
-
-  # map short descriptions to functions checking classes
-  short_to_fn = {'tc': ('tree child', is_tree_child),
-                 'ntc': ('nearly tree child', is_nearly_treechild),
-                 'gs': ('genetically stable', is_genetically_stable),
-                 'ts': ('tree sibling', is_tree_sibling),
-                 'rv': ('reticulation visible', is_reticulation_visible),
-                 'cv': ('component visible', is_component_visible),
-                 'cp': ('compressed', is_compressed),
-                 'ns': ('nearly stable', is_nearly_stable),
-                 'tb': ('tree based', is_tree_based)
-                }
-
-  # report about a property
-  def report_property(self, short):
-    long = self.short_to_fn[short][0]
-    val = self.short_to_fn[short][1](self)
-    self.log("=== N is " + vocalize[val] + long + " ===")
-    return ";" + vocalize[val] + short
 
 
 
@@ -862,11 +876,8 @@ def main():
           for uv in PN.N.edges():
             graph_out.write(str(uv[0]) + ' ' + str(uv[1]) + "\n")
 
-      for short in ['ret', 'lvl', 'rcl', 'uc', 'ucb']:
-        line += PN.report_value(short)
-
-      for short in network_types:
-        line += PN.report_property(short)
+      for short in ['r', 'lvl', 'rsi', 'ur', 'urb'] + network_types:
+        line += PN.properties[short].report()
 
       # write information about the network
       output.write(line + "\n")

@@ -2,10 +2,11 @@
 
 import argparse
 import os
-import sys
 import re
 import networkx
 import Queue
+import sys
+import random
 
 #############################################################################
 # RecoPhyNC - recognizing phylogenetic networks classes
@@ -60,7 +61,8 @@ positive_implications = {'tc' : ['ntc', 'ns'],
                          'ntc': ['gs'],
                          'gs' : ['ts', 'rv'],
                          'rv' : ['cv'],
-                         'ns' : ['cv']}
+                         'ns' : ['cv'],
+                         'gt' : ['rv']}
 # step 1: negative implications: if a network is not key, then it is also not value
 negative_implications = dict([(x,[y for y in positive_implications if x in positive_implications[y]]) for x in network_types])
 
@@ -160,21 +162,18 @@ class PhyloNetwork:
     map(X.put, self.leaves)
 
     # the current number of vertices that can see x
-    spread = dict()
-    for x in self.leaves:
-      spread[x] = 1
+    spread = dict([(x,1) for x in self.leaves])
     # for each vertex, the set of leaves it can reach
     reach = dict([(x,set()) for x in self.N.nodes()])
-    reach.update(dict([(x,set(x)) for x in self.leaves]))
+    reach.update(dict([(x,set([x])) for x in self.leaves]))
     # for each vertex, how many successors we have processed
-    childs_seen = dict()
+    childs_seen = dict([(x,None) for x in self.leaves])
 
     while not X.empty():
       i = X.get(False)
 
       for j in reach[i]:
         spread[j] -= 1
-      self.log('considering ' + i + ' with reachability ' + str(reach[i]))
       for p in self.N.predecessors(i):
         childs_seen[p] = childs_seen.get(p, 0) + 1
         for j in reach[i]:
@@ -183,8 +182,9 @@ class PhyloNetwork:
           reach[p].add(j)
         if childs_seen[p] == self.N.out_degree(p):
           X.put(p)
-          self.stability[p] = set([x for x in self.leaves if x in reach[p] and spread[x] == 1])
-      self.log('among ' + str(X) + ', the spread is ' + str(spread))
+          self.stability[p] = set([x for x in reach[p] if spread[x] == 1])
+      del reach[i]
+      del childs_seen[i]
     #print "Time Stable vertices: "+str((datetime.datetime.now()-t0).microseconds)+"ms."
     
     if self.verbose:
@@ -197,11 +197,10 @@ class PhyloNetwork:
   def _update_infos(self):
     self.root = None
     self.regular = None
+    self.log('checking the network for strangeness...')
     for i in self.N:
       indeg = self.N.in_degree(i)
       outdeg = self.N.out_degree(i)
-      if indeg > 2 or outdeg > 2:
-        self.binary = False
       if indeg == 1 and outdeg == 1:
         raise DegreeError(str(i) + " has indegree & outdegree 1")
       if indeg > 1 and outdeg > 1:
@@ -223,16 +222,20 @@ class PhyloNetwork:
         self.leaves.append(i)
     if self.root is None:
       raise DegreeError("no root in network")
-    
+
+    if self.N.out_degree(self.root) != self.regular:
+      self.regular = 0
+
     self.log('N has ' + str(self.N.number_of_nodes()) + " vertices and " \
         + str(self.N.number_of_edges()) + " edges." \
         + " Its root is " + str(self.root) + "."
-        + "N is " + ("not " if self.regular == 0 else str(self.regular) + "-") + "regular")
+        + " N is " + ("not " if self.regular == 0 else str(self.regular) + "-") + "regular")
     self.log('reticulations: ' + str(self.reticulations))
+    self.log('leaves: ' + str(self.leaves))
 
 
   # Input: text file containing a list of arcs
-  # Output: network given as a dict associating to each vertex the table of its children
+  # Effect: read network from the file
   def open(self, filename):
     with open(filename) as fd:
       for line in fd.readlines():  # match patterns of type "vertex1 vertex2"
@@ -243,7 +246,129 @@ class PhyloNetwork:
     self._update_infos()
     self._update_stable()
 
+  # Input: edge (u,v)
+  # Output: subdivide uv and return the new vertex w, as well as a list of new edges
+  def subdivide(self, uv):
+    w = self.N.number_of_nodes()
+    new_edges = [(uv[0],w),(w,uv[1])]
+    self.N.remove_edge(uv[0], uv[1])
+    self.N.add_edges_from(new_edges)
+    return w, new_edges
+
+  # Input: n, regularity
+  # Effect: create regular spanning tree on n vertices if possible
+  def create_regular_tree(self, n, regularity = 2):
+    if (n - 1) % regularity != 0:
+      raise DegreeError('no ' + str(regularity) + '-regular tree with ' + str(n) + ' nodes exist')
+
+    self.log('creating ' + str(regularity) + '-regular tree on ' + str(n) + ' nodes')
+    rand = random.Random()
+    current_leaves = [0]
+    for i in xrange((n - 1)/regularity):
+      leaf = current_leaves.pop(int(rand.uniform(0, len(current_leaves))))
+      for j in xrange(regularity):
+        index = i * regularity + j + 1
+        self.N.add_edge(leaf, index)
+        current_leaves.append(index)
+    return current_leaves
+
+  # Input: list of node types
+  # Output: a random node of this type if include = True, otherwise a random node not of this type
+  def random_node(self, allowed_types, include = True):
+    rand = random.Random()
+    u = rand.randint(0, self.N.number_of_nodes() - 1)
+    while (self.node_type(u) in allowed_types) != include:
+      u = rand.randint(0, self.N.number_of_nodes() - 1)
+    return u
+
+  # Input: m
+  # Output: m edges picked uniformly at random
+  def random_edges(self, num_edges):
+    m = self.N.number_of_edges()
+    if num_edges > m:
+      raise ValueError('not enough edges in the network')
+    
+    rand = random.Random()
+    return rand.sample(self.N.edges(), num_edges)
+    
+
+  # Input: n
+  # Effect: create a random BINARY network with n nodes & reticulation number distributed exponentially with mean r_mean
+  def create_binary(self, num_nodes, r_mean):
+    # step 0: get eligible numbers of reticulations for n & regularity
+    n = num_nodes
+    if n % 2 == 0:
+      raise DegreeError('no network with even number of nodes (' + str(n) + ') can be binary')
+
+    rand = random.Random()
+    retis = min(int(rand.expovariate(1.0 / r_mean)), (n-1)/2 - 1);
+
+    # NOTE: we use m = sum of in-degrees = sum of out-degrees, assuming the root is counted in t:
+    # (1) regularity * r + (n - r) = m + 1    NOTE: +1 needed for the root
+    # (2) regularity * t + r = m
+    
+    # step 2: compute r, t, and l
+    m = retis + n - 1
+    # retis = (m - n + 1) / (regularity - 1)
+    treenodes = (m - retis) / 2
+    leaves = n - retis - treenodes
+    self.log('creating random network with ' + str(treenodes) + ' tree nodes, ' + str(retis) + ' reticulations, and ' + str(leaves) + ' leaves ( = ' + str(num_nodes) + ' nodes)')
+
+    # step 3: create binary spanning tree on treenodes - retis + leaves
+    self.create_regular_tree(n - 2*retis)
+
+    # step 4: repeatedly add an edge between 2 random edges, creating a new tree node and reticulation each time
+    # NOTE: ensure time consistency by giving each node a time and each new node the mean of its old parent and child
+    self.log('adding reticulations...')
+    edges = self.N.edges()
+    time = dict([(x,x) for x in xrange(n - 2*retis)])
+    for i in xrange(retis):
+      e_idx = rand.sample(xrange(len(edges)), 2)
+
+      w = [0, 1]
+      for i in (0,1):
+        e = edges[e_idx[i]]
+        w[i], new_edges = self.subdivide(e)
+        time[w[i]] = (time[e[0]] + time[e[1]]) / 2
+        # update edges
+        edges[e_idx[i]] = new_edges.pop()
+        edges.extend(new_edges)
       
+      self.N.add_edge(w[0], w[1])
+      edges.append((w[0], w[1]))
+
+
+    
+    self._update_infos()
+    self._update_stable()
+
+
+  # Input: n
+  # Effect: create a random network with n nodes &
+  #         reticulation number distributed exponentially with mean r_mean
+  #         the network results from contracting a number of edges that is normally distributed around contraction_mean with sigma = n/10
+  def create_random(self, num_nodes, r_mean, contractions_mean):
+    self.log('creating random network with ' + str(num_nodes) + ' nodes')
+    rand = random.Random()
+    n = num_nodes
+    contractions = int(rand.gaussvariate(non_binary_mean, n/10.0));
+    if n + contractions % 2 == 0:
+      contractions += 1
+
+    # step 0: create random binary network with n + non_binary nodes
+    self.create_binary(n + contractions, r_mean)
+
+    # step 1: contract 'contractions' edges in N
+    # keep an eye on vertices with both in- and out-degree > 1. They will be uncontracted later
+    invalid_nodes = set()
+    for i in xrange(contractions):
+      u = rand.randint(0, self.N.number_of_nodes())
+      
+      
+
+    self._update_infos()
+    self._update_stable()
+     
 
 
   # Input: some edge uv
@@ -284,12 +409,12 @@ class PhyloNetwork:
       if t == 'root':
         return 1
       else:
+        # we consider the root to be a tree node
         n = self.N.number_of_nodes()
         m = self.N.number_of_edges()
-        dr = self.N.out_degree(self.root)
         retis = (m - n + 1) / (self.regular - 1)
-        tree = (m - retis - dr) / self.regular
-        leaf = n - retis - tree - 1
+        tree = (m - retis) / self.regular
+        leaf = n - retis - tree
         return {'leaf': leaf,
                 'tree': tree,
                 'reticulation': retis}.get(t, 0)
@@ -305,10 +430,9 @@ class PhyloNetwork:
     for u in self.reticulations:
       if self.node_type(self.N.successors(u)[0]) == 'tree':
         self.log('component-root ' + str(u) + ' is stable on ' + str(self.stability.get(u, [])))
-    unstable_roots = [u for u in self.reticulations if not self.is_reticulation(self.N.successors(u)[0]) and not self.is_stable(u)]
+    unstable_roots = set([u for u in self.reticulations if not self.is_reticulation(self.N.successors(u)[0]) and not self.is_stable(u)])
     # if there are unstable roots, we cannot have component visibility
-    if unstable_roots:
-      self.unset_property('cv')
+    self.set_property('cv', not unstable_roots)
     self.log("unstable roots: " + str(unstable_roots))
     return unstable_roots
 
@@ -320,9 +444,9 @@ class PhyloNetwork:
   # output: the size of the largest sublist that intersects a block in N
   def max_per_block(self, v_set):
     biconn_comp = networkx.biconnected_components(self.N.to_undirected())
-    lists_per_block = [ [x for x in self.N.subgraph(B) if x in v_set] for B in biconn_comp ]
+    lists_per_block = [ v_set.intersection(B) for B in biconn_comp if len(B) > 2]
     self.log('per block: ' + str(lists_per_block))
-    return max([len(x) for x in lists_per_block])
+    return max([len(x) for x in lists_per_block]) if lists_per_block else 0
 
   # Input: binary rooted network N
   # Output: level of N
@@ -373,7 +497,7 @@ class PhyloNetwork:
         parents_seen[s] = parents_seen.get(s, 0) + 1
         if parents_seen[s] == self.N.in_degree(s):
           X.put(s)
-    return max(collective_indeg.values())
+    return max(collective_indeg.values() or [0])
 
 
   # map short descriptions to functions computing values
@@ -398,10 +522,14 @@ class PhyloNetwork:
     self.properties[prop] = val
     if val:
       for impl in positive_implications.get(prop, []):
-        self.set_property(impl, True)
+        if impl not in self.properties:
+          self.log('deriving ' + impl + ' from ' + prop)
+          self.set_property(impl, True)
     else:
       for impl in negative_implications.get(prop, []):
-        self.set_property(impl, False)
+        if impl not in self.properties:
+          self.log('deriving not-' + impl + ' from not-' + prop)
+          self.set_property(impl, False)
 
   def unset_property(self, prop):
     self.set_property(prop, False)
@@ -429,8 +557,20 @@ class PhyloNetwork:
     else:
       return False
 
+  # Output: True if N is nested, False otherwise
+  def is_nested(self):
+    pass
+    #TODO: write me
 
-  # Input: rooted network N
+  # Output: True if N is a galled tree, False otherwise
+  def is_galled_tree(self):
+    if 'gt' in self.properties:
+      return self.properties['gt']
+    else:
+      result = (self.compute_level() == 1)
+      self.set_property('gt', result)
+      return result
+
   # Output: True if N is tree-child, False otherwise
   def is_tree_sibling(self):
     """
@@ -495,7 +635,6 @@ class PhyloNetwork:
     predecessors = self.N.predecessors_iter
     for v in self.N:
       if v != self.root:
-        self.log("Testing if " + str(v) + " is stable or all its parents are.")
         if not self.is_stable(v):
           self.log(str(v) + " is not stable.")
 
@@ -581,7 +720,7 @@ class PhyloNetwork:
     if 'ntc' in self.properties:
       return self.properties['ntc']
 
-    has_TC = dict([(x,True) for v in self.leaves for x in self.N.predecessors(v)[0]])
+    has_TC = dict([(self.N.predecessors(v)[0],True) for v in self.leaves])
     
     for r in self.reticulations:
       for p in self.N.predecessors(r):
@@ -682,24 +821,46 @@ def main():
     )
 
     parser.add_argument(
-        'file', type=str,
-        help='the data file to analyze'
+        '-f','--file', type=str, help='the data file to analyze', dest='file'
     )
     parser.add_argument(
-        '--verbose', action='store_true', help="verbose mode"
+        '-v','--verbose', action='store_true', help="verbose mode", dest='verbose'
+    )
+    parser.add_argument(
+        '-r','--rand', help="create random binary network. --rand x,y creates a binary network\
+            with x nodes whose number of reticulations is picked from an exponential distribution \
+            with mean y (default: y = x/10)", dest='rand'
+    )
+    parser.add_argument(
+        '-o,--out', help="write graph to file in edgelist format", dest='out'
     )
 
     arguments = parser.parse_args()
 
-    folder = os.path.abspath(os.path.dirname(arguments.file))
+    if not arguments.file and not arguments.rand:
+      print "invalid arguments: need either --file or --rand, check --help for information"
+      return
 
+    folder = os.path.abspath(os.path.dirname(arguments.file if arguments.file else sys.argv[0]))
+    
     # read all data files in specified folder and classify networks -----------
     with open(os.path.join(folder, "results2.csv"),"a") as output:
       PN = PhyloNetwork(arguments.verbose)
       # network initialization and preprocessing
-      PN.open(arguments.file)
 
-      line = arguments.file
+      line = ''
+      if arguments.file:
+        PN.open(arguments.file)
+        line = arguments.file
+      elif arguments.rand:
+        rand_args = [int(x) for x in arguments.rand.split(',')]
+        PN.create_binary(rand_args[0], rand_args[1] if len(rand_args) > 1 else rand_args[0]/10)
+        line = "(random-" + str(PN.N.number_of_nodes()) + "-" + str(PN.N.number_of_edges()) + ")"
+
+      if arguments.out:
+        with open(os.path.join(folder, arguments.out + ".graph"), "w") as graph_out:
+          for uv in PN.N.edges():
+            graph_out.write(str(uv[0]) + ' ' + str(uv[1]) + "\n")
 
       for short in ['ret', 'lvl', 'rcl', 'uc', 'ucb']:
         line += PN.report_value(short)

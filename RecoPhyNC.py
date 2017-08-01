@@ -444,7 +444,7 @@ class MaxReticulationSubgraphIndegree(NumericalNetworkProperty):
         parents_seen[s] = parents_seen.get(s, 0) + 1
         if parents_seen[s] == network.N.in_degree(s):
           X.put(s)
-    return max(collective_indeg.values() or [0])
+    self.set(max(collective_indeg.values() or [0]))
 
 
 

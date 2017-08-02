@@ -1,13 +1,17 @@
 #!/usr/bin/env python
 
+#Python3 compatibility
+from __future__ import absolute_import, division, print_function, unicode_literals
+
 import argparse
 import os
 import re
 import networkx
-import Queue
+from queue import Queue
 import sys
 import random
 import glob
+from collections import defaultdict
 
 #############################################################################
 # RecoPhyNC - recognizing phylogenetic networks classes
@@ -42,19 +46,17 @@ import glob
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #############################################################################
 
-#verbose = True
-VERBOSE = False
-
-print """
+print("""
 RecoPhyNC Copyright (C) 2015 Philippe Gambette
 This program comes with ABSOLUTELY NO WARRANTY.
 This is free software, and you are welcome to redistribute it
 under certain conditions (GNU General Public License).
-"""
+""")
 
 # a dict that gives "not " if the input is False and "" otherwise
 vocalize = {False: "not ", True: ""}
 
+numerical_properties = ['r', 'lvl', 'rsi', 'ur', 'urb']
 network_types = ['tc', 'ntc', 'gs', 'ts', 'rv', 'cv', 'cp', 'ns', 'tb']
 # implication of network types (NOTE: only the transitive reduction is given)
 # step 1: positive implications: if a network is key, then it is also value
@@ -133,6 +135,8 @@ class NetworkProperty:
   def __nonzero__(self):
     return self.get()
 
+  # Python3 compat
+  __bool__ = __nonzero__
 
   # report about a property
   def report(self):
@@ -279,7 +283,7 @@ class ComponentVisibleProp(NetworkProperty):
         if not network.verbose:
           return False
       else:
-        self.log(str(s) + " is stable on " + str(network.stability.get(s, [])))
+        self.log(str(s) + " is stable on " + str(network.stability.get(s, None)))
     self.set_if_none()
 
 
@@ -419,7 +423,7 @@ class NestedDepth(NumericalNetworkProperty):
       for B in biconn_comp:
           # compute the nested depth of each biconnected component
           for node in B:
-              print node
+              print(node)
               #...
 
 
@@ -431,18 +435,17 @@ class MaxReticulationSubgraphIndegree(NumericalNetworkProperty):
     network = self.network
     successors = network.N.successors_iter
 
-    parents_seen = dict()
-    collective_indeg = dict()
-    X = Queue.Queue()
+    parents_seen = defaultdict(int)
+    collective_indeg = defaultdict(int)
+    X = Queue()
     X.put(network.root)
 
     while not X.empty():
       v = X.get_nowait()
       for s in successors(v):
         if network.is_reticulation(s):
-          collective_indeg[s] = collective_indeg.get(s,0) \
-                              + (collective_indeg[v] if network.is_reticulation(v) else 1)
-        parents_seen[s] = parents_seen.get(s, 0) + 1
+          collective_indeg[s] += (collective_indeg[v] if network.is_reticulation(v) else 1)
+        parents_seen[s] += 1
         if parents_seen[s] == network.N.in_degree(s):
           X.put(s)
     self.set(max(collective_indeg.values() or [0]))
@@ -513,7 +516,7 @@ class PhyloNetwork:
   # Effect: print log string if verbose flag is raised
   def log(self, s):
     if self.verbose:
-      print s
+      print(s)
 
 
   # Input: rooted network N, some vertex u
@@ -597,16 +600,16 @@ class PhyloNetwork:
     #t0=datetime.datetime.now()
 
     # the current bottom-up front
-    X = Queue.Queue()
+    X = Queue()
     map(X.put, self.leaves)
 
     # the current number of vertices that can see x
     spread = dict([(x,1) for x in self.leaves])
     # for each vertex, the set of leaves it can reach
-    reach = dict([(x,set()) for x in self.N.nodes()])
+    reach = defaultdict(set)
     reach.update(dict([(x,set([x])) for x in self.leaves]))
     # for each vertex, how many successors we have processed
-    childs_seen = dict([(x,None) for x in self.leaves])
+    childs_seen = defaultdict(int)
 
     while not X.empty():
       i = X.get(False)
@@ -626,7 +629,6 @@ class PhyloNetwork:
           self.stability[p] = set([x for x in reach[p] if spread[x] == 1])
 
       del reach[i]
-      del childs_seen[i]
     #print "Time Stable vertices: "+str((datetime.datetime.now()-t0).microseconds)+"ms."
     
     if self.verbose:
@@ -875,7 +877,7 @@ def main():
     arguments = parser.parse_args()
 
     if sum([bool(arguments.file), bool(arguments.dir), bool(arguments.rand)]) != 1:
-      print "Invalid arguments! I need EXACTLY one of --file, --dir, and --rand. Check --help for more information."
+      print("Invalid arguments! I need EXACTLY one of --file, --dir, and --rand. Check --help for more information.")
       return
 
     file_list = ''
@@ -896,7 +898,7 @@ def main():
 
         line = ''
         if data_file:
-          print "working on ", data_file
+          print("working on ", data_file)
           PN.open(data_file)
           line = os.path.basename(data_file)
         else:
@@ -907,7 +909,7 @@ def main():
         if arguments.out:
           PN.write_dot(os.path.join(folder, arguments.out + (os.path.basename(data_file) + '.dot' if arguments.dir else '') ))
 
-        for short in ['r', 'lvl', 'rsi', 'ur', 'urb'] + network_types:
+        for short in numerical_properties + network_types:
           line += PN.properties[short].report()
 
         # write information about the network

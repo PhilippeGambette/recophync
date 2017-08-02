@@ -193,13 +193,6 @@ class TreeChildProp(NetworkProperty):
     self.set_if_none()
 
 
-class NestedProp(NetworkProperty):
-  # Output: True if N is nested, False otherwise
-  def check(self):
-    pass
-    #TODO: write me
-
-
 class GalledTreeProp(NetworkProperty):
   # Output: True if N is a galled tree, False otherwise
   def check(self):
@@ -420,42 +413,35 @@ class NestingDepth(NumericalNetworkProperty):
   # go upwards in the network until we see a reticulation or a blocker
   # return the blocker/reticulation (or None if the root was reached),
   #     as well as a set of vertices on the path with their distance to u
-  def climb_tree_until(self, u, blocker):
-    while not self.network.is_reticulation(u) and not u == blocker:
-      p = self.network.N.predecessors(u)
-      if p:
-        u = p[0]
-      else:
-        self.log('found the root')
-        # if networkx can no longer find any predecessors, then we're at the root
-        return u
+  def climb_tree_until(self, u, blocker, taboo_nodes):
+    while not self.network.is_reticulation(u) and not u == blocker and not u in taboo_nodes:
+      taboo_nodes.add(u)
+      u = self.network.N.predecessors(u)[0]
     return u
 
-  # return the lowest vertex that is stable on r, filling self.lowest_stable
-  # the strategy is to get a path from any parent of r to the root and use the vertices on
-  #   this path to block paths from all the other parents towards the root. The lowest
-  #   stable vertex of r is then the highest encountered blocker
-  def goto_lowest_stable(self, r, initial_distance = 0):
+  # travel from a reticulation to its lowest stable vertex w, jumping over nested blocks 
+  # if ever we encounter a node that we've seen in a previous climb (taboo_nodes), we
+  # can conclude that the network is not nested
+  def goto_lowest_stable(self, r, taboo_nodes):
     if r not in self.lowest_stable:
       network = self.network
       predecessors = network.N.predecessors_iter
-      # map blockers to their distance to r
-      blocker_distance = dict()
-      # keep track of the lowest stable vertices that we have jumped to
-      jump_targets = set()
       # save the lowest stable vertex above r
       stable_on_r = network.stability_tree.predecessors(r)[0]
       for p in predecessors(r):
         # climb the tree from p, jumping over previously evaluated cycles using lowest_stable
         u = p
         while True:
-          u = self.climb_tree_until(p, stable_on_r)
+          u = self.climb_tree_until(p, stable_on_r, taboo_nodes)
           self.log(str(r) + ': climbed from ' + str(p) + ' (' + network.node_type(p) + ') to '
                                    + str(u) + ' (' + network.node_type(u) + ')')
 
-          # if we climbed to a jump target or our last jump target was a blocker (except the root),
-          # we know that N is NOT NESTED
-          if u in jump_targets:
+          if u == stable_on_r:
+            break
+
+          # if we climbed or jumped to a previous jump target we know that N is NOT NESTED
+          if u in taboo_nodes:
+            self.log('encountered taboo node ' + str(u) + ' between ' + str(stable_on_r) + ' and ' + str(r))
             self.set(-1)
             if not network.verbose:
               return None
@@ -464,8 +450,6 @@ class NestingDepth(NumericalNetworkProperty):
             # if we arrive at a reticulation, then continue from the high-point of its cycle
             p = network.stability_tree.predecessors(u)[0]
             self.log('jumping from ' + str(u) + ' to ' + str(p))
-            # register the jump target
-            jump_targets.add(p)
             # add r -> u to the nesting tree
             self.nesting_tree.add_edge(r, u)
           else:
@@ -494,29 +478,35 @@ class NestingDepth(NumericalNetworkProperty):
   # Output: -1 if not nested, nested depth otherwise
   def check(self):
     """Returns the nested depth of a rooted binary network N, or -1 if N is not nested."""
-    self.lowest_stable = dict()
     network = self.network
-    predecessors = network.N.predecessors_iter
-    for B in networkx.biconnected_components(network.N.to_undirected()):
-      if len(B) > 2:
-        BR = B.intersection(network.reticulations)
-        self.nesting_tree = networkx.DiGraph()
-        self.nesting_tree.add_nodes_from(BR)
+    # note that level-0/1 implies nesting depth 0/1
+    level = network.properties['lvl'].get()
+    if level > 1:
+      predecessors = network.N.predecessors_iter
+      self.lowest_stable = dict()
+      for B in networkx.biconnected_components(network.N.to_undirected()):
+        if len(B) > 2:
+          BR = B.intersection(network.reticulations)
+          self.nesting_tree = networkx.DiGraph()
+          self.nesting_tree.add_nodes_from(BR)
 
-        for r in BR:
-          self.goto_lowest_stable(r)
-
-        if self.val is None:
-          self.log('nesting tree: ' + str(self.nesting_tree.edges()))
-          depths = dict()
+          taboo_nodes = set()
           for r in BR:
-            self.depth_in_nesting_tree(r, depths)
-          self.log('nesting tree depths: ' + str(depths))
-          self.set(max(depths.values() or [1])) # NOTE: if BR is a single cycle, the nesting tree is empty
-        elif not network.verbose:
-          return
-    # if we still didn't set the nesting depths, then |B|=2 for all blocks (N is a tree), so set it to 0
-    self.set_if_none(0)
+            self.goto_lowest_stable(r, taboo_nodes)
+
+          if self.val is None:
+            self.log('nesting tree: ' + str(self.nesting_tree.edges()))
+            depths = dict()
+            for r in BR:
+              self.depth_in_nesting_tree(r, depths)
+            self.log('nesting tree depths: ' + str(depths))
+            self.set(max(depths.values() or [1])) # NOTE: if BR is a single cycle, the nesting tree is empty
+          elif not network.verbose:
+            return
+      # if we still didn't set the nesting depths, then |B|=2 for all blocks (N is a tree), so set it to 0
+      self.set_if_none(0)
+    else:
+      self.set(level)
 
 
 

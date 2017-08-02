@@ -56,7 +56,7 @@ under certain conditions (GNU General Public License).
 # a dict that gives "not " if the input is False and "" otherwise
 vocalize = {False: "not ", True: ""}
 
-numerical_properties = ['r', 'lvl', 'rsi', 'ur', 'urb']
+numerical_properties = ['r', 'lvl', 'rsi', 'ur', 'urb', 'nd']
 network_types = ['tc', 'ntc', 'gs', 'ts', 'rv', 'cv', 'cp', 'ns', 'tb']
 # implication of network types (NOTE: only the transitive reduction is given)
 # step 1: positive implications: if a network is key, then it is also value
@@ -239,7 +239,7 @@ class ReticulationVisibleProp(NetworkProperty):
         if not network.verbose:
           return False
       else:
-        self.log(str(v) + " is stable on " + str(network.stability.get(v, set())))
+        self.log(str(v) + " is stable on " + str(network.stability.get(v, None)))
     self.set_if_none()
 
 
@@ -411,20 +411,114 @@ class NumUnstableRootsPerBlock(NumericalNetworkProperty):
     self.set(network.max_per_block(uc.unstable_roots))
 
 
-class NestedDepth(NumericalNetworkProperty):
+class NestingDepth(NumericalNetworkProperty):
+  # a rooted tree of reticulations in N that is the transitive reduction of the graph with
+  # (u,v) is an edge <=> v and lowest_stable[v] are strictly between u & lowest_stable[u]
+  # NOTE: the depth of this tree (if it exists) is the nesting depth
+  nesting_tree = None
+
+  # go upwards in the network until we see a reticulation or a blocker
+  # return the blocker/reticulation (or None if the root was reached),
+  #     as well as a set of vertices on the path with their distance to u
+  def climb_tree_until(self, u, blocker):
+    while not self.network.is_reticulation(u) and not u == blocker:
+      p = self.network.N.predecessors(u)
+      if p:
+        u = p[0]
+      else:
+        self.log('found the root')
+        # if networkx can no longer find any predecessors, then we're at the root
+        return u
+    return u
+
+  # return the lowest vertex that is stable on r, filling self.lowest_stable
+  # the strategy is to get a path from any parent of r to the root and use the vertices on
+  #   this path to block paths from all the other parents towards the root. The lowest
+  #   stable vertex of r is then the highest encountered blocker
+  def goto_lowest_stable(self, r, initial_distance = 0):
+    if r not in self.lowest_stable:
+      network = self.network
+      predecessors = network.N.predecessors_iter
+      # map blockers to their distance to r
+      blocker_distance = dict()
+      # keep track of the lowest stable vertices that we have jumped to
+      jump_targets = set()
+      # save the lowest stable vertex above r
+      stable_on_r = network.stability_tree.predecessors(r)[0]
+      for p in predecessors(r):
+        # climb the tree from p, jumping over previously evaluated cycles using lowest_stable
+        u = p
+        while True:
+          u = self.climb_tree_until(p, stable_on_r)
+          self.log(str(r) + ': climbed from ' + str(p) + ' (' + network.node_type(p) + ') to '
+                                   + str(u) + ' (' + network.node_type(u) + ')')
+
+          # if we climbed to a jump target or our last jump target was a blocker (except the root),
+          # we know that N is NOT NESTED
+          if u in jump_targets:
+            self.set(-1)
+            if not network.verbose:
+              return None
+
+          if network.is_reticulation(u):
+            # if we arrive at a reticulation, then continue from the high-point of its cycle
+            p = network.stability_tree.predecessors(u)[0]
+            self.log('jumping from ' + str(u) + ' to ' + str(p))
+            # register the jump target
+            jump_targets.add(p)
+            # add r -> u to the nesting tree
+            self.nesting_tree.add_edge(r, u)
+          else:
+            # otherwise, we've found stable_on_r
+            break
+
+
+  # compute and return the depth in the nesting_tree
+  def depth_in_nesting_tree(self, r, depths):
+    if not r in depths:
+      p = self.nesting_tree.predecessors(r)
+      if p:
+        if len(p) > 1:
+          raise ValueError('Mathias is bad at programming')
+        d = self.depth_in_nesting_tree(p[0], depths) + 1
+        depths[r] = d
+        return d
+      else:
+        # by definition of nesting depth, only trees have nesting depth 0,
+        # so the reticulation at the root of the nesting tree gets nesting depth 1
+        return 1
+    else:
+      return depths[r]
+
   # Input: binary rooted network N
   # Output: -1 if not nested, nested depth otherwise
-  # TODO: Does not work yet
   def check(self):
-      """Returns the nested depth of a rooted binary network N, or -1 if N is not
-       nested.
-      """
-      biconn_comp = networkx.biconnected_components(self.network.N.to_undirected())
-      for B in biconn_comp:
-          # compute the nested depth of each biconnected component
-          for node in B:
-              print(node)
-              #...
+    """Returns the nested depth of a rooted binary network N, or -1 if N is not nested."""
+    self.lowest_stable = dict()
+    network = self.network
+    predecessors = network.N.predecessors_iter
+    for B in networkx.biconnected_components(network.N.to_undirected()):
+      if len(B) > 2:
+        BR = B.intersection(network.reticulations)
+        self.nesting_tree = networkx.DiGraph()
+        self.nesting_tree.add_nodes_from(BR)
+
+        for r in BR:
+          self.goto_lowest_stable(r)
+
+        if self.val is None:
+          self.log('nesting tree: ' + str(self.nesting_tree.edges()))
+          depths = dict()
+          for r in BR:
+            self.depth_in_nesting_tree(r, depths)
+          self.log('nesting tree depths: ' + str(depths))
+          self.set(max(depths.values() or [1])) # NOTE: if BR is a single cycle, the nesting tree is empty
+        elif not network.verbose:
+          return
+    # if we still didn't set the nesting depths, then |B|=2 for all blocks (N is a tree), so set it to 0
+    self.set_if_none(0)
+
+
 
 
 # the highest number of incoming arcs in N into any connected component of N[R]
@@ -475,7 +569,10 @@ class PhyloNetwork:
   # set of leaves
   leaves = None
 
-  # a dict mapping each vertex to the set of leaves it is stable on
+  # stability tree of N: rooted tree in which (u,v) <=> u is the lowest vertex in N that is stable on v
+  stability_tree = None
+
+  # a dict mapping each vertex to ONE OF THE leaves it is stable on
   stability = None
 
   # network regularity (2 = binary, 0 = irregular)
@@ -490,7 +587,9 @@ class PhyloNetwork:
     self.root = None
     self.reticulations = set()
     self.leaves = set()
+    self.stability_tree = networkx.DiGraph()
     self.stability = dict()
+    self.lowest_stable = dict()
     self.regular = None
      # map short descriptions to functions checking classes
     self.properties = {'tc' : TreeChildProp('tree child', 'tc', self),
@@ -506,7 +605,7 @@ class PhyloNetwork:
                        # numerical properties
                        'r'  : NumReticulations('#reticulations', 'r', self),
                        'lvl': Level('level', 'lvl', self),
-                       'nd' : NestedDepth('nested depth', 'nd', self),
+                       'nd' : NestingDepth('nesting depth', 'nd', self),
                        'ur' : NumUnstableRoots('#unstable component roots', 'ur', self),
                        'urb': NumUnstableRootsPerBlock('#unstable components roots per block', 'urb', self),
                        'rsi': MaxReticulationSubgraphIndegree('max #incoming edges to any reticulation component', 'rsi', self)
@@ -598,37 +697,50 @@ class PhyloNetwork:
     # compute stable vertices
     self.log("""== Computing the stable vertices ==""")
     #t0=datetime.datetime.now()
-
+    
+    # initialize stability with the parents of all leaves
+    self.stability.update((next(self.N.predecessors_iter(l)),l) for l in self.leaves)
     # the current bottom-up front
     X = Queue()
     map(X.put, self.leaves)
 
     # the current number of vertices that can see x
-    spread = dict((x,1) for x in self.leaves)
+    spread = defaultdict(int)
     # for each vertex, the set of leaves it can reach
     reach = defaultdict(set)
-    reach.update((x,set([x])) for x in self.leaves)
     # for each vertex, how many successors we have processed
     childs_seen = defaultdict(int)
 
     while not X.empty():
-      i = X.get(False)
+      v = X.get(False)
 
-      for j in reach[i]:
+      for j in reach[v]:
         spread[j] -= 1
-      for p in self.N.predecessors_iter(i):
+      for p in self.N.predecessors_iter(v):
         childs_seen[p] = childs_seen.get(p, 0) + 1
-        for j in reach[i]:
+        for j in reach[v].union(set([v])):
           if j not in reach[p]:
             spread[j] += 1
           reach[p].add(j)
 
-      for p in self.N.predecessors_iter(i):
+      self.log(str(v) + ": spreads: " + str(spread))
+      for p in self.N.predecessors_iter(v):
         if childs_seen[p] == self.N.out_degree(p):
           X.put(p)
-          self.stability[p] = set(x for x in reach[p] if spread[x] == 1)
+          #self.stability[p] = set(x for x in reach[p] if spread[x] == 1)
+          p_stable = [i for i in reach[p] if spread[i] == 1]
+          self.log(str(p) + ' is stable on ' + str(p_stable))
+          for x in p_stable:
+            self.stability_tree.add_edge(p, x)
+            # update stability dict (for leaves) - note that all parents of leaves are initialized
+            if x in self.stability:
+              self.stability[p] = self.stability[x]
 
-      del reach[i]
+            # forget about x
+            reach[p].discard(x)
+            del spread[x]
+
+      del reach[v]
     #print "Time Stable vertices: "+str((datetime.datetime.now()-t0).microseconds)+"ms."
     
     if self.verbose:
@@ -636,6 +748,7 @@ class PhyloNetwork:
       for u in self.stability:
         if self.is_stable(u):
           self.log(str(u) + ': ' + str(self.stability[u]))
+      self.log('stability tree: ' + str(self.stability_tree.edges()))
 
       
 

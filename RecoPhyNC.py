@@ -67,7 +67,7 @@ positive_implications = {'tc' : ['ntc', 'ns'],
                          'ns' : ['cv'],
                          'gt' : ['rv']}
 # step 1: negative implications: if a network is not key, then it is also not value
-negative_implications = dict([(x,[y for y in positive_implications if x in positive_implications[y]]) for x in network_types])
+negative_implications = dict((x,[y for y in positive_implications if x in positive_implications[y]]) for x in network_types)
 
 # error class for encountering vertices not matching indeg == 1 XOR outdeg == 1
 class DegreeError(ValueError):
@@ -166,9 +166,9 @@ class TreeBasedProp(NetworkProperty):
     N = network.N
     # step 1: build G_N
     B = networkx.Graph()
-    B.add_nodes_from([str(x)+'a' for x in N.nodes()], bipartite=0)
-    B.add_nodes_from([str(x)+'b' for x in N.nodes()], bipartite=1)
-    B.add_edges_from([(str(x)+'a', str(y)+'b') for (x,y) in N.edges()])
+    B.add_nodes_from((str(x)+'a' for x in N.nodes_iter()), bipartite=0)
+    B.add_nodes_from((str(x)+'b' for x in N.nodes_iter()), bipartite=1)
+    B.add_edges_from(((str(x)+'a', str(y)+'b') for (x,y) in N.edges_iter()))
 
     # step 2: check if G_N has a matching of size |V| - |X|
     match = networkx.bipartite.maximum_matching(B)
@@ -312,7 +312,7 @@ class NearlyTreeChildProp(NetworkProperty):
     if not self.network.is_reticulation(v):
       if v in has_TP:
         return has_TP[v]
-      for i in self.network.N.successors(v):
+      for i in self.network.N.successors_iter(v):
         has_TP[v] = self.check_TP(i, has_TP)
         if has_TP[v]:
           return True
@@ -323,7 +323,7 @@ class NearlyTreeChildProp(NetworkProperty):
   def check(self):
     network = self.network
     predecessors = network.N.predecessors_iter
-    has_TP = dict([(next(predecessors(v)),True) for v in network.leaves])
+    has_TP = dict((next(predecessors(v)),True) for v in network.leaves)
     
     for r in network.reticulations:
       for p in predecessors(r):
@@ -470,19 +470,19 @@ class PhyloNetwork:
   root = None
 
   # set of reticulations
-  reticulations = set()
+  reticulations = None
 
   # set of leaves
-  leaves = set()
+  leaves = None
 
   # a dict mapping each vertex to the set of leaves it is stable on
-  stability = dict()
+  stability = None
 
   # network regularity (2 = binary, 0 = irregular)
   regular = None
 
   # the property objects that will compute the properties
-  properties = dict()
+  properties = None
 
   def __init__(self, _verbose = False):
     self.verbose = _verbose
@@ -548,20 +548,20 @@ class PhyloNetwork:
     u = uv[0]
     v = uv[1]
     self.N.remove_edge(u,v)
-    self.N.add_edges_from([(v,w) for w in self.N.successors(u)])
-    self.N.add_edges_from([(w,v) for w in self.N.predecessors(u)])
+    self.N.add_edges_from((v,w) for w in self.N.successors_iter(u))
+    self.N.add_edges_from((w,v) for w in self.N.predecessors_iter(u))
     if delete_node:
       self.N.remove_node(u)
     else:
-      self.N.remove_edges_from([(u,w) for w in self.N.successors(u)])
-      self.N.remove_edges_from([(w,u) for w in self.N.predecessors(u)])
+      self.N.remove_edges_from((u,w) for w in self.N.successors_iter(u))
+      self.N.remove_edges_from((w,u) for w in self.N.predecessors_iter(u))
 
   # Input: a vertex u
   # Effect: replace u with the join of predecessors(u) with successors(u)
   # NOTE: this will turn length-2 cycles into loops
   def shortcut_over(u):
-    for v in self.N.predecessors(u):
-      for w in self.N.successors(u):
+    for v in self.N.predecessors_iter(u):
+      for w in self.N.successors_iter(u):
         self.N.add_edge(v,w)
     self.N.remove_node(u)
 
@@ -583,8 +583,8 @@ class PhyloNetwork:
       v = X.pop()
       #self.log('considering ' + str(v) + ' with indeg ' + str(self.N.in_degree(v)) + ' & outdeg ' + str(self.N.out_degree(v)))
       if self.N.in_degree(v) == self.N.out_degree(v) == 1:
-        u = self.N.predecessors(v)[0]
-        w = self.N.successors(v)[0]
+        u = next(self.N.predecessors_iter(v))
+        w = next(self.N.successors_iter(v))
         self.log(str(v) + " was indegree-1 outdegree-1, so I removed it.")
         self.N.add_edge(u, w)
         self.N.remove_node(v)
@@ -604,10 +604,10 @@ class PhyloNetwork:
     map(X.put, self.leaves)
 
     # the current number of vertices that can see x
-    spread = dict([(x,1) for x in self.leaves])
+    spread = dict((x,1) for x in self.leaves)
     # for each vertex, the set of leaves it can reach
     reach = defaultdict(set)
-    reach.update(dict([(x,set([x])) for x in self.leaves]))
+    reach.update((x,set([x])) for x in self.leaves)
     # for each vertex, how many successors we have processed
     childs_seen = defaultdict(int)
 
@@ -616,17 +616,17 @@ class PhyloNetwork:
 
       for j in reach[i]:
         spread[j] -= 1
-      for p in self.N.predecessors(i):
+      for p in self.N.predecessors_iter(i):
         childs_seen[p] = childs_seen.get(p, 0) + 1
         for j in reach[i]:
           if j not in reach[p]:
             spread[j] += 1
           reach[p].add(j)
 
-      for p in self.N.predecessors(i):
+      for p in self.N.predecessors_iter(i):
         if childs_seen[p] == self.N.out_degree(p):
           X.put(p)
-          self.stability[p] = set([x for x in reach[p] if spread[x] == 1])
+          self.stability[p] = set(x for x in reach[p] if spread[x] == 1)
 
       del reach[i]
     #print "Time Stable vertices: "+str((datetime.datetime.now()-t0).microseconds)+"ms."
@@ -703,7 +703,7 @@ class PhyloNetwork:
     self.log('creating ' + str(regularity) + '-regular tree on ' + str(n) + ' nodes')
     rand = random.Random()
     current_leaves = [0]
-    for i in xrange((n - 1)/regularity):
+    for i in xrange((n - 1)//regularity):
       leaf = current_leaves.pop(int(rand.uniform(0, len(current_leaves))))
       for j in xrange(regularity):
         index = i * regularity + j + 1
@@ -721,7 +721,7 @@ class PhyloNetwork:
       raise DegreeError('no network with even number of nodes (' + str(n) + ') can be binary')
 
     rand = random.Random()
-    retis = min(int(rand.expovariate(1.0 / r_mean)), (n-1)/2 - 1);
+    retis = min(int(rand.expovariate(1.0 / r_mean)), (n-1)//2 - 1);
 
     # NOTE: we use m = sum of in-degrees = sum of out-degrees, assuming the root is counted in t:
     # (1) regularity * r + (n - r) = m + 1    NOTE: +1 needed for the root
@@ -730,7 +730,7 @@ class PhyloNetwork:
     # step 2: compute r, t, and l
     m = retis + n - 1
     # retis = (m - n + 1) / (regularity - 1)
-    treenodes = (m - retis) / 2
+    treenodes = (m - retis) // 2
     leaves = n - retis - treenodes
     self.log('creating random network with ' + str(treenodes) + ' tree nodes, ' + str(retis) + ' reticulations, and ' + str(leaves) + ' leaves ( = ' + str(num_nodes) + ' nodes)')
 
@@ -741,7 +741,7 @@ class PhyloNetwork:
     # NOTE: ensure time consistency by giving each node a time and each new node the mean of its old parent and child
     self.log('adding reticulations...')
     edges = self.N.edges()
-    time = dict([(x,x) for x in xrange(n - 2*retis)])
+    time = dict((x,x) for x in xrange(n - 2*retis))
     for i in xrange(retis):
       e_idx = rand.sample(xrange(len(edges)), 2)
 
@@ -749,7 +749,7 @@ class PhyloNetwork:
       for i in (0,1):
         e = edges[e_idx[i]]
         w[i], new_edges = self.subdivide(e)
-        time[w[i]] = (time[e[0]] + time[e[1]]) / 2
+        time[w[i]] = (time[e[0]] + time[e[1]]) // 2
         # update edges
         edges[e_idx[i]] = new_edges.pop()
         edges.extend(new_edges)
@@ -794,8 +794,7 @@ class PhyloNetwork:
     # step 2: uncontract invalid nodes
     for u in invalid_nodes:
       v = self.N.add_node()
-      succ = self.N.successors(u)
-      for w in succ:
+      for w in self.N.successors_iter(u):
         self.N.remove_edge(u, w)
         self.N.add_edge(v, w)
       self.N.add_edge(u, v)
@@ -810,7 +809,7 @@ class PhyloNetwork:
   # Input: a type t (0,1,2,3)
   # Output: list of vertices of N of type t
   def get_nodes(self, t):
-    return [u for u in self.N.nodes() if self.node_type(u) == t]
+    return (u for u in self.N.nodes() if self.node_type(u) == t)
 
   # Input: a type t (0,1,2,3)
   # Output: list of vertices of N of type t
@@ -822,8 +821,8 @@ class PhyloNetwork:
         # we consider the root to be a tree node
         n = self.N.number_of_nodes()
         m = self.N.number_of_edges()
-        retis = (m - n + 1) / (self.regular - 1)
-        tree = (m - retis) / self.regular
+        retis = (m - n + 1) // (self.regular - 1)
+        tree = (m - retis) // self.regular
         leaf = n - retis - tree
         return {'leaf': leaf,
                 'tree': tree,
@@ -835,9 +834,9 @@ class PhyloNetwork:
   # output: the size of the largest sublist that intersects a block in N
   def max_per_block(self, v_set):
     biconn_comp = networkx.biconnected_components(self.N.to_undirected())
-    lists_per_block = [ v_set.intersection(B) for B in biconn_comp if len(B) > 2]
+    lists_per_block = [v_set.intersection(B) for B in biconn_comp if len(B) > 2]
     self.log('per block: ' + str(lists_per_block))
-    return max([len(x) for x in lists_per_block]) if lists_per_block else 0
+    return max((len(x) for x in lists_per_block)) if lists_per_block else 0
 
   
   def write_dot(self, filename):
@@ -876,7 +875,7 @@ def main():
 
     arguments = parser.parse_args()
 
-    if sum([bool(arguments.file), bool(arguments.dir), bool(arguments.rand)]) != 1:
+    if sum(bool(x) for x in [arguments.file, arguments.dir, arguments.rand]) != 1:
       print("Invalid arguments! I need EXACTLY one of --file, --dir, and --rand. Check --help for more information.")
       return
 
@@ -903,7 +902,7 @@ def main():
           line = os.path.basename(data_file)
         else:
           rand_args = [int(x) for x in arguments.rand.split(',')]
-          PN.create_binary(rand_args[0], rand_args[1] if len(rand_args) > 1 else rand_args[0]/10)
+          PN.create_binary(rand_args[0], rand_args[1] if len(rand_args) > 1 else rand_args[0]/10.0)
           line = "(random-" + str(PN.N.number_of_nodes()) + "-" + str(PN.N.number_of_edges()) + ")"
 
         if arguments.out:

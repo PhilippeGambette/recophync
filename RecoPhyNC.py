@@ -56,7 +56,17 @@ under certain conditions (GNU General Public License).
 # a dict that gives "not " if the input is False and "" otherwise
 vocalize = {False: "not ", True: ""}
 
-numerical_properties = ['r', 'lvl', 'rsi', 'ur', 'urb', 'nd']
+# numerical properties:
+# r = number of reticulations
+# lvl = level
+# rsi = maximum indegree of a connected component consisting only of reticulations
+# ur = number of unstable roots
+# urb = max. number of unstable roots per block
+# nd = nesting depth
+# sp = max. over all reticulations r of the shortest path connecting the parents of r that avoids r
+# srh = max. small reticulation height of any reticulation (shortest distance to a lowest vertex that is ancestor of both parents of r)
+# brh = max. big reticulation height of any reticulation (farthest distance to a lowest vertex that is ancestor of both parents of r)
+numerical_properties = ['r', 'lvl', 'rsi', 'ur', 'urb', 'nd', 'sp', 'srh', 'brh']
 network_types = ['tc', 'ntc', 'gs', 'ts', 'rv', 'cv', 'cp', 'ns', 'tb']
 # implication of network types (NOTE: only the transitive reduction is given)
 # step 1: positive implications: if a network is key, then it is also value
@@ -71,10 +81,13 @@ negative_implications = dict((x,[y for y in positive_implications if x in positi
 
 # error class for encountering vertices not matching indeg == 1 XOR outdeg == 1
 class DegreeError(ValueError):
-  def __init__(self, arg):
-    self.strerror = arg
-    self.args = {arg}
+    def __init__(self, arg):
+        self.strerror = arg
+        self.args = {arg}
 
+# error class for exiting multiple encapsulated loops
+class Break(ValueError):
+    pass
 
 class NetworkProperty:
   # long description of the property
@@ -438,23 +451,18 @@ class NestingDepth(NumericalNetworkProperty):
 
           if u == stable_on_r:
             break
-
-          # if we climbed or jumped to a previous jump target we know that N is NOT NESTED
-          if u in taboo_nodes:
-            self.log('encountered taboo node ' + str(u) + ' between ' + str(stable_on_r) + ' and ' + str(r))
-            self.set(-1)
-            if not network.verbose:
-              return None
-
-          if network.is_reticulation(u):
+          elif network.is_reticulation(u):
             # if we arrive at a reticulation, then continue from the high-point of its cycle
             p = network.stability_tree.predecessors(u)[0]
             self.log('jumping from ' + str(u) + ' to ' + str(p))
             # add r -> u to the nesting tree
             self.nesting_tree.add_edge(r, u)
           else:
-            # otherwise, we've found stable_on_r
-            break
+            #u in taboo_nodes:
+            # if we climbed or jumped to a previous jump target we know that N is NOT NESTED
+            self.log('encountered taboo node ' + str(u) + ' between ' + str(stable_on_r) + ' and ' + str(r))
+            self.set(-1)
+            return
 
 
   # compute and return the depth in the nesting_tree
@@ -537,6 +545,38 @@ class MaxReticulationSubgraphIndegree(NumericalNetworkProperty):
 
 
 
+# the max over all reticulations r of the distance of its parents in N-r
+class ShortestPath(NumericalNetworkProperty):
+    def check(self):
+        pass
+
+
+
+
+# the max over all reticulations r of the smallest distance between r and any lowest common ancestor of r's parents
+class SmallReticulationHeight(NumericalNetworkProperty):
+    def check(self):
+        network = self.network
+        predecessors = network.N.predecessors_iter
+        max_height = 0
+        for r in network.reticulations:
+            height = 0
+            for v in predecessors(r):
+                sees[v] = set([v])
+CONTINUE HERE
+                
+
+
+
+
+
+
+# the max over all reticulations r of the farthest distance between r and any lowest common ancestor of r's parents
+class BigReticulationHeight(NumericalNetworkProperty):
+    def check(self):
+        pass
+
+
 
 
 
@@ -598,7 +638,10 @@ class PhyloNetwork:
                        'nd' : NestingDepth('nesting depth', 'nd', self),
                        'ur' : NumUnstableRoots('#unstable component roots', 'ur', self),
                        'urb': NumUnstableRootsPerBlock('#unstable components roots per block', 'urb', self),
-                       'rsi': MaxReticulationSubgraphIndegree('max #incoming edges to any reticulation component', 'rsi', self)
+                       'rsi': MaxReticulationSubgraphIndegree('max #incoming edges to any reticulation component', 'rsi', self),
+                       'sp' : ShortestPath('max shortest path above reticulation', 'sp', self),
+                       'srh': SmallReticulationHeight('min distance of any lowest vertex seeing both parents', 'srh', self),
+                       'brh': BigReticulationHeight('max distance of any lowest vertex seeing both parents', 'brh', self)
                       }
 
   # Input: log string

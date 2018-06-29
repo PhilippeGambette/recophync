@@ -1,9 +1,9 @@
 
 
-from queue import Queue
+import re
 import random
 import networkx
-from collections import defaultdict
+from collections import defaultdict, deque
 
 from properties.common import numerical_properties, network_types
 from properties.bool_prop import *
@@ -27,8 +27,8 @@ class PhyloNetwork:
   # set of leaves
   leaves = None
 
-  # stability tree of N: rooted tree in which (u,v) <=> u is the lowest vertex in N that is stable on v
-  stability_tree = None
+  # immediate dominators of each vertex in N
+  dominators = None
 
   # a dict mapping each vertex to ONE OF THE leaves it is stable on
   stability = None
@@ -45,7 +45,6 @@ class PhyloNetwork:
     self.root = None
     self.reticulations = set()
     self.leaves = set()
-    self.stability_tree = networkx.DiGraph()
     self.stability = dict()
     self.lowest_stable = dict()
     self.regular = None
@@ -69,7 +68,8 @@ class PhyloNetwork:
                        'rsi': MaxReticulationSubgraphIndegree('max #incoming edges to any reticulation component', 'rsi', self),
                        'sp' : ShortestPath('max shortest path above reticulation', 'sp', self),
                        'srh': SmallReticulationHeight('min distance of any lowest vertex seeing both parents', 'srh', self),
-                       'brh': BigReticulationHeight('max distance of any lowest vertex seeing both parents', 'brh', self)
+                       'brh': BigReticulationHeight('max distance of any lowest vertex seeing both parents', 'brh', self),
+                       'ua' : UncommonAncestors('max number of uncommon ancestors of parents of any reticulation', 'ua', self)
                       }
 
   # Input: log string
@@ -105,8 +105,7 @@ class PhyloNetwork:
   # Input: some edge uv
   # Effect: contract uv in N unto v
   def contract_edge(self, uv, delete_node = True):
-    u = uv[0]
-    v = uv[1]
+    u,v = uv
     self.N.remove_edge(u,v)
     self.N.add_edges_from((v,w) for w in self.N.successors_iter(u))
     self.N.add_edges_from((w,v) for w in self.N.predecessors_iter(u))
@@ -138,9 +137,7 @@ class PhyloNetwork:
   # Input: a rooted phylogenetic network N
   # Output: N where each indegree and outdegre 1 vertex is contracted with its parent
   def _contract(self):
-    X = set(self.N.nodes()) #NOTE: we need a set here to avoid having a node multiple times in the queue
-    while X:
-      v = X.pop()
+    for v in self.N.nodes():
       #self.log('considering ' + str(v) + ' with indeg ' + str(self.N.in_degree(v)) + ' & outdeg ' + str(self.N.out_degree(v)))
       if self.N.in_degree(v) == self.N.out_degree(v) == 1:
         u = next(self.N.predecessors_iter(v))
@@ -148,8 +145,6 @@ class PhyloNetwork:
         self.log(str(v) + " was indegree-1 outdegree-1, so I removed it.")
         self.N.add_edge(u, w)
         self.N.remove_node(v)
-        X.add(u)
-        X.add(w)
 
 
   # input: none
@@ -157,59 +152,26 @@ class PhyloNetwork:
   def _update_stable(self):
     # compute stable vertices
     self.log("""== Computing the stable vertices ==""")
-    #t0=datetime.datetime.now()
-    
-    # initialize stability with the parents of all leaves
-    self.stability.update((next(self.N.predecessors_iter(l)),l) for l in self.leaves)
-    # the current bottom-up front
-    X = Queue()
-    map(X.put, self.leaves)
 
-    # the current number of vertices that can see x
-    spread = defaultdict(int)
-    # for each vertex, the set of leaves it can reach
-    reach = defaultdict(set)
-    # for each vertex, how many successors we have processed
-    childs_seen = defaultdict(int)
+    # compute immediate dominators
+    self.dominators = networkx.immediate_dominators(self.N, self.root)
 
-    while not X.empty():
-      v = X.get(False)
+    # for each vertex, assign a leaf that they are stable on
+    self.stability = dict((u,u) for u in self.leaves)
+    X = list(self.leaves.copy())
+    while X:
+      u = X.pop()
+      v = self.dominators[u]
+      if v not in self.stability:
+        self.stability[v] = u
+        X.append(v)
 
-      for j in reach[v]:
-        spread[j] -= 1
-      for p in self.N.predecessors_iter(v):
-        childs_seen[p] = childs_seen.get(p, 0) + 1
-        for j in reach[v].union(set([v])):
-          if j not in reach[p]:
-            spread[j] += 1
-          reach[p].add(j)
-
-      self.log(str(v) + ": spreads: " + str(spread))
-      for p in self.N.predecessors_iter(v):
-        if childs_seen[p] == self.N.out_degree(p):
-          X.put(p)
-          #self.stability[p] = set(x for x in reach[p] if spread[x] == 1)
-          p_stable = [i for i in reach[p] if spread[i] == 1]
-          self.log(str(p) + ' is stable on ' + str(p_stable))
-          for x in p_stable:
-            self.stability_tree.add_edge(p, x)
-            # update stability dict (for leaves) - note that all parents of leaves are initialized
-            if x in self.stability:
-              self.stability[p] = self.stability[x]
-
-            # forget about x
-            reach[p].discard(x)
-            del spread[x]
-
-      del reach[v]
-    #print "Time Stable vertices: "+str((datetime.datetime.now()-t0).microseconds)+"ms."
-    
     if self.verbose:
-      self.log('stability:')
+      self.log('immediate dominators:')
       for u in self.stability:
         if self.is_stable(u):
           self.log(str(u) + ': ' + str(self.stability[u]))
-      self.log('stability tree: ' + str(self.stability_tree.edges()))
+
 
       
 

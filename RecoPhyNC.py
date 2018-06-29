@@ -5,7 +5,6 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import argparse
 import os
-import re
 import sys
 import glob
 
@@ -119,7 +118,8 @@ def main():
           PN.write_dot(os.path.join(folder, arguments.out + (os.path.basename(data_file) + '.dot' if arguments.dir else '') ))
 
         for short in numerical_properties + network_types:
-          line += PN.properties[short].report()
+          print("property " + short + ": " + PN.properties[short].report())
+          line += ';' + PN.properties[short].report()
 
         # write information about the network
         output.write(line + "\n")

@@ -60,7 +60,6 @@ class NestingDepth(NumericalNetworkProperty):
 
   # go upwards in the network until we see a reticulation or a blocker
   # return the blocker/reticulation (or None if the root was reached),
-  #     as well as a set of vertices on the path with their distance to u
   def climb_tree_until(self, u, blocker, taboo_nodes):
     while not self.network.is_reticulation(u) and not u == blocker and not u in taboo_nodes:
       taboo_nodes.add(u)
@@ -75,7 +74,7 @@ class NestingDepth(NumericalNetworkProperty):
       network = self.network
       predecessors = network.N.predecessors_iter
       # save the lowest stable vertex above r
-      stable_on_r = network.stability_tree.predecessors(r)[0]
+      stable_on_r = network.dominators[r]
       for p in predecessors(r):
         # climb the tree from p, jumping over previously evaluated cycles using lowest_stable
         u = p
@@ -88,7 +87,7 @@ class NestingDepth(NumericalNetworkProperty):
             break
           elif network.is_reticulation(u):
             # if we arrive at a reticulation, then continue from the high-point of its cycle
-            p = network.stability_tree.predecessors(u)[0]
+            p = network.dominators[u]
             self.log('jumping from ' + str(u) + ' to ' + str(p))
             # add r -> u to the nesting tree
             self.nesting_tree.add_edge(r, u)
@@ -179,39 +178,110 @@ class MaxReticulationSubgraphIndegree(NumericalNetworkProperty):
 
 
 # maximum number of uncommon ancestors in N
-class NumUncommonAncestors(NumericalNetworkProperty):
+class UncommonAncestors(NumericalNetworkProperty):
+
+  # return a reverse topological order from r
+  def rev_top_order_from(self, r):
+    def explore(r):
+      if r not in seen:
+        seen.add(r)
+        order.append(r)
+        for j in self.network.N.predecessors(r):
+          explore(j)
+
+    order = []
+    seen = set()
+    explore(r)
+    return order
+
+  #Uncommon ancestors of parents of a reticulation node
+  #Input  - reticulation node r, network G, reversed network R
+  #Output - list of uncommon ancestors of parents of r
+  def UA(self, r):
+    #return the bitwise OR of all items in the list
+    def list_or(L): return reduce(lambda a,b: a|b, L, 0)
+
+    # get the reversed topological order from r upwards
+    T = self.rev_top_order_from(r)
+    [u1,u2] = self.network.N.predecessors(r)
+    if T[0] != u1:
+      u1, u2 = u2, u1
+    L = dict()
+    L[u1] = 1
+    T.remove(u1)
+    while T:
+      q = T.pop(0)
+      L[q] = list_or(map(lambda a:L[a], filter(lambda x: x in L, self.network.N.successors(q))))
+      if q == u2:
+        L[q] |= 2
+    result = list(filter(lambda i: L[i] != 3, L.keys()))
+    if result:
+      self.log("uncommon ancestors for %s: %s" % (str(r), str(result)))
+    return result
+
 
   # output: maximum number of uncommon ancestors of reticulations in N
   def check(self):
-      pass
+    if self.network.reticulations:
+      self.val = max([len(self.UA(u)) for u in self.network.reticulations])
+    else:
+      self.val = 0
 
 
 
 
 # the max over all reticulations r of the distance of its parents in N-r
 class ShortestPath(NumericalNetworkProperty):
-    def check(self):
-        pass
+
+  # assign distances from u (offset by "current") in the BFS-tree T
+  def assign_distances_tree(self, T, u, distances, current = 0):
+    distances[u].append(current)
+    for v in T.successors_iter(u):
+      self.assign_distances_tree(T, v, distances, current + 1)
 
 
+  # for a given u, return a dict mapping common ancestors x of u's parents to lists of distances to said parents
+  def common_parent_distances(self, u):
+    dists = defaultdict(list)
+    for v in self.network.N.predecessors_iter(u):
+      self.assign_distances_tree(networkx.bfs_tree(self.network.N, v, reverse = True), v, dists)
+    # get a list of nodes who have distances from all predecessors
+    # finally, filter non-pareto minimal items (which are not lowest ancestors)
+    print("filtered: %s" % str(filter(lambda x: len(x) == self.network.N.in_degree(u), dists.values())))
+    return pareto_mins(filter(lambda x: len(x) == self.network.N.in_degree(u), dists.values()))
+
+
+  def check(self):
+    # set the small and big reticulation heights at the same time
+    srh_prop = self.network.properties['srh']
+    brh_prop = self.network.properties['brh']
+
+    self.val = 0
+    srh_prop.val = 0
+    brh_prop.val = 0
+
+    for u in self.network.N:
+      if self.network.N.in_degree(u) > 1:
+        dists = self.common_parent_distances(u)
+        # update val with the min over all common ancestors of their distances to parents of u
+        self.val = max(self.val, min(sum(x) for x in dists))
+        # update small reticulation height with the min over all common ancestors of the min of the distances to parents of u
+        srh_prop.val = max(srh_prop.val, min(min(x) for x in dists))
+        # update big reticulation height with the max over all common ancestors of the max of the distances to parents of u
+        brh_prop.val = max(brh_prop.val, max(max(x) for x in dists))
+       
 
 
 # the max over all reticulations r of the smallest distance between r and any lowest common ancestor of r's parents
 class SmallReticulationHeight(NumericalNetworkProperty):
-    def check(self):
-        pass
-#===================== CONTINUE HERE  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                
-
-
-
-
+  def check(self):
+    self.network.properties['sp'].check()
 
 
 # the max over all reticulations r of the farthest distance between r and any lowest common ancestor of r's parents
 class BigReticulationHeight(NumericalNetworkProperty):
     def check(self):
-        pass
+      self.network.properties['sp'].check()
 
 
 

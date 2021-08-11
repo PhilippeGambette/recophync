@@ -107,8 +107,8 @@ def isTreeChild(network):
     """
     all_nodes_tree_child = True
     n_in_degree = network.in_degree
-    n_successors_iter = network.successors_iter
-    for non_leaf in (v for v, degree in network.out_degree_iter() if degree):
+    n_successors_iter = network.successors()
+    for non_leaf in (v for v, degree in network.out_degree() if degree):
         tree_child_node = any(n_in_degree(c) == 1 for c in n_successors_iter(non_leaf))
         if not tree_child_node:
             if VERBOSE:
@@ -125,8 +125,8 @@ def isTreeSibling(network, reticulations_of_n):
     :param reticulations_of_n:
     :return:
     """
-    n_predecessors_iter = network.predecessors_iter
-    n_successors_iter = network.successors_iter
+    n_predecessors_iter = network.predecessors()
+    n_successors_iter = network.successors()
     all_nodes_tree_sibling = True
     for v in reticulations_of_n:
         # for each reticulation vertex, we build its set of siblings S
@@ -177,8 +177,8 @@ def isNearlyStable(network, stable_vertices):
     """
     nearly_stable = True
     # skipping dots may improve speed
-    n_predecessors_iter = network.predecessors_iter
-    for nonroot in (vertex for vertex, degree in network.in_degree_iter() if degree):
+    n_predecessors_iter = network.predecessors()
+    for nonroot in (vertex for vertex, degree in network.in_degree() if degree):
         if not nearly_stable:
             break
         if VERBOSE:
@@ -231,7 +231,7 @@ def isCompressed(network, network_reticulations):
     """Returns True if network N is compressed, False otherwise."""
     # skipping dots may improve speed
     n_in_degree = network.in_degree
-    n_predecessors_iter = network.predecessors_iter
+    n_predecessors_iter = network.predecessors()
     compressed = True
     for reticulation in network_reticulations:
         for p in (w for w in n_predecessors_iter(reticulation) if n_in_degree(w) > 1):
@@ -258,9 +258,9 @@ def isNearlyTreeChild(network, stable_vertices, reticulations_of_n):
 
     nearly_tree_child = True
     # skipping dots may improve speed
-    n_predecessors_iter = network.predecessors_iter
+    n_predecessors_iter = network.predecessors()
     # let's filter reticulations directly
-    for reticulation in (v for v, d in network.in_degree_iter() if d > 1):
+    for reticulation in (v for v, d in network.in_degree() if d > 1):
         if not nearly_tree_child:
             break
         # Check if at least one parent of v has the tree path property
@@ -308,7 +308,7 @@ def hasTreePath(v, network, visited):
 # Output: True if N is genetically stable, False otherwise
 def isGeneticallyStable(network, stable_vertices, reticulations_of_n):
     gen_stable = True
-    n_predecessors_iter = network.predecessors_iter
+    n_predecessors_iter = network.predecessors()
     for reticulation in reticulations_of_n:
         if not gen_stable:
             break
@@ -337,7 +337,7 @@ def root(network):
     :param network:
     :return:
     """
-    for vertex, degree in network.in_degree_iter():
+    for vertex, degree in network.in_degree():
         if not degree:
             return vertex
 
@@ -372,7 +372,7 @@ def leafNumber(network):
     :param network:
     :return:
     """
-    return sum(1 for vertex, degree in network.out_degree_iter() if not degree)
+    return sum(1 for vertex, degree in network.out_degree() if not degree)
 
 
 # Input: a rooted phylogenetic network N
@@ -382,12 +382,12 @@ def leaves(network):
     :param network:
     :return:
     """
-    return {vertex for vertex, degree in network.out_degree_iter() if not degree}
+    return {vertex for vertex, degree in network.out_degree() if not degree}
 
 
 def reticulations(network):
     """Returns the set of reticulations in N."""
-    return {vertex for vertex, degree in network.in_degree_iter() if degree > 1}
+    return {vertex for vertex, degree in network.in_degree() if degree > 1}
 
 
 def main():
@@ -439,7 +439,7 @@ def main():
             leaves_of_n = leaves(network)
             reticulations_of_n = reticulations(network)
             stable_vertices = {
-                v for v in network.nodes_iter() if not network.out_degree(v) or not network.in_degree(v)
+                v for v in network.nodes() if not network.out_degree(v) or not network.in_degree(v)
                                                    or isStable(v, network, root_n, leaves_of_n)
             }
 
@@ -511,14 +511,14 @@ def main():
             # tree-sibling
             # t0=datetime.datetime.now()
 
-            trSib = n_classification.get("gs", False) or isTreeSibling(network, reticulations_of_n)
-            n_classification["ts"] = trSib
+            tr_sib = n_classification.get("gs", False) or isTreeSibling(network, reticulations_of_n)
+            n_classification["ts"] = tr_sib
             if VERBOSE:
-                if trSib:
+                if tr_sib:
                     print("""== network is tree-sibling. ==""")
                 else:
                     print("""== network is not tree-sibling. ==""")
-            if trSib:
+            if tr_sib:
                 line = ''.join((line, ";ts"))
             else:
                 line = ''.join((line, ";not ts"))
@@ -527,16 +527,16 @@ def main():
 
             # reticulation-visible
             # t0=datetime.datetime.now()
-            retVis = n_classification.get("gs", False) or isReticulationVisible(
+            ret_vis = n_classification.get("gs", False) or isReticulationVisible(
                 stable_vertices, reticulations_of_n
             )
-            n_classification["rv"] = retVis
+            n_classification["rv"] = ret_vis
             if VERBOSE:
-                if retVis:
+                if ret_vis:
                     print("""== network is reticulation visible. ==""")
                 else:
                     print("""== network is not reticulation visible. ==""")
-            if retVis:
+            if ret_vis:
                 line = ''.join((line, ";rv"))
             else:
                 line = ''.join((line, ";not rv"))
@@ -557,7 +557,7 @@ def main():
                 line = ''.join((line, ";cp"))
             else:
                 line = ''.join((line, ";not cp"))
-            # print "Time Compressed: "+str((datetime.datetime.now()-t0).microseconds)+"ms."
+            # print "Time Compressed: "+str((datetime.datetime.now() - t0).microseconds)+"ms."
 
             # nearly-stable
             # t0=datetime.datetime.now()
@@ -565,16 +565,14 @@ def main():
             n_classification["ns"] = ns
             if VERBOSE:
                 if ns:
-                    print("""== network is nearly stable. ==
-                 """)
+                    print("""== network is nearly stable. ==""")
                 else:
-                    print("""== network is not nearly stable. ==
-                 """)
+                    print("""== network is not nearly stable. ==""")
             if ns:
                 line = ''.join((line, ";ns"))
             else:
                 line = ''.join((line, ";not ns"))
-            # print "Time Compressed: "+str((datetime.datetime.now()-t0).microseconds)+"ms."
+            # print "Time Compressed: "+str((datetime.datetime.now() - t0).microseconds)+"ms."
 
             # write information about the network
             output.write(line + "\n")

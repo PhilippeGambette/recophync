@@ -14,4 +14,4 @@ whether a phylogenetic network, given as a file containing a list of arcs
 * &#9745; compressed
 * &#9745; nearly stable 
 
-It has been updated to work with `Python3`
+It has been updated to work with `Python3` and the latest version of `networkx`

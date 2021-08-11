@@ -407,7 +407,7 @@ def main():
     file_filter = "*"
 
     # read all data files in specified folder and classify networks -----------
-    with open(os.path.join(folder, "results2.csv"), "w") as output:
+    with open(os.path.join(folder, "results2.csv"), "w+") as output:
         output.write('file,level,tree-child,nearly tree-child,genetically stable,tree-sibling,reticulation-visible,'
                      'compressed,nearly stable\n')
         for data_file in glob.glob(os.path.join(folder, "data", file_filter)):

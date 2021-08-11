@@ -215,7 +215,7 @@ def isStable(v, network, network_root, network_leaves):
     stable = False
     network_v = network.copy()
     network_v.remove_node(v)
-    t = {vertex for vertex in networkx.dfs_tree(network_v, network_root).nodes_iter()}
+    t = {vertex for vertex in networkx.dfs_tree(network_v, network_root).nodes()}
     for leaf in network_leaves.difference(t):
         if VERBOSE:
             print("Vertex", v, "is stable for", leaf)
@@ -350,17 +350,15 @@ def contract(network):
     :return:
     """
     found_candidate = True
-    n_in_degree = network.in_degree
-    n_out_degree = network.out_degree
-    n_nodes = network.nodes
-    n_predecessors = network.predecessors
-    n_successors = network.successors
+    n_in_degree = network.in_degree()
+    n_out_degree = network.out_degree()
+    n_nodes = list(network.nodes())
     while found_candidate:
         found_candidate = False
-        for vertex in (v for v in n_nodes() if n_in_degree(v) == 1 and n_out_degree(v) == 1):
+        for vertex in (v for v in n_nodes if n_in_degree(v) == 1 and n_out_degree(v) == 1):
             if VERBOSE:
                 print(vertex, "was an in-degree 1 out-degree 1 vertex")
-            network.add_edge(n_predecessors(vertex)[0], n_successors(vertex)[0])
+            network.add_edge(list(network.predecessors(vertex))[0], list(network.successors(vertex))[0])
             network.remove_node(vertex)
             found_candidate = True
 
@@ -401,7 +399,7 @@ def main():
     )
 
     parser.add_argument(
-        'folder', type=str,
+        '-f', type=str, dest='folder',
         help='the path to the folder that contains the data files'
     )
     parser.add_argument(
@@ -439,8 +437,8 @@ def main():
             leaves_of_n = leaves(network)
             reticulations_of_n = reticulations(network)
             stable_vertices = {
-                v for v in network.nodes() if not network.out_degree(v) or not network.in_degree(v)
-                                                   or isStable(v, network, root_n, leaves_of_n)
+                v for v in network.nodes() if
+                not (network.out_degree and network.in_degree and not isStable(v, network, root_n, leaves_of_n))
             }
 
             if VERBOSE:
@@ -548,11 +546,9 @@ def main():
             n_classification["cp"] = comp
             if VERBOSE:
                 if comp:
-                    print("""== network is compressed. ==
-                 """)
+                    print("""== network is compressed. ==""")
                 else:
-                    print("""== network is not compressed. ==
-                 """)
+                    print("""== network is not compressed. ==""")
             if comp:
                 line = ''.join((line, ";cp"))
             else:
@@ -572,7 +568,7 @@ def main():
                 line = ''.join((line, ";ns"))
             else:
                 line = ''.join((line, ";not ns"))
-            # print "Time Compressed: "+str((datetime.datetime.now() - t0).microseconds)+"ms."
+            # print "Time Compressed: " + str((datetime.datetime.now() - t0).microseconds)+"ms."
 
             # write information about the network
             output.write(line + "\n")

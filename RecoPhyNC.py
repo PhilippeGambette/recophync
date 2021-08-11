@@ -88,10 +88,12 @@ def computeLevel(network):
     :return:
     """
     level = 0
-    for BN in networkx.biconnected_components(network.to_undirected()):
+    print("Computing level...")
+    undirected = network.to_undirected()
+    for BN, BE in zip(networkx.biconnected_components(undirected), networkx.biconnected_component_edges(undirected)):
         # compute the level of each bi-connected component
-        m = BN.number_of_edges()
-        n = BN.number_of_nodes()
+        m = len(BN)
+        n = len(BE)
         if m - n + 1 > level:
             level = m - n + 1
     return level
@@ -106,10 +108,8 @@ def isTreeChild(network):
     :return:
     """
     all_nodes_tree_child = True
-    n_in_degree = network.in_degree
-    n_successors_iter = network.successors()
     for non_leaf in (v for v, degree in network.out_degree() if degree):
-        tree_child_node = any(n_in_degree(c) == 1 for c in n_successors_iter(non_leaf))
+        tree_child_node = any(network.in_degree(c) == 1 for c in network.successors(non_leaf))
         if not tree_child_node:
             if VERBOSE:
                 print("Vertex", non_leaf, " is not tree-child.")
@@ -125,12 +125,10 @@ def isTreeSibling(network, reticulations_of_n):
     :param reticulations_of_n:
     :return:
     """
-    n_predecessors_iter = network.predecessors()
-    n_successors_iter = network.successors()
     all_nodes_tree_sibling = True
     for v in reticulations_of_n:
         # for each reticulation vertex, we build its set of siblings S
-        siblings = set(c for p in n_predecessors_iter(v) for c in n_successors_iter(p))
+        siblings = set(c for p in network.predecessors(v) for c in network.successors(p))
         siblings.discard(v)
         # we check if S contains at least one tree vertex
         if VERBOSE:
@@ -177,7 +175,6 @@ def isNearlyStable(network, stable_vertices):
     """
     nearly_stable = True
     # skipping dots may improve speed
-    n_predecessors_iter = network.predecessors()
     for nonroot in (vertex for vertex, degree in network.in_degree() if degree):
         if not nearly_stable:
             break
@@ -187,7 +184,7 @@ def isNearlyStable(network, stable_vertices):
             if VERBOSE:
                 print("Vertex", nonroot, "is not stable.")
             all_predecessors_stable = True
-            for p in n_predecessors_iter(nonroot):
+            for p in network.predecessors(nonroot):
                 if p not in stable_vertices:
                     all_predecessors_stable = False
                     if VERBOSE:
@@ -230,11 +227,9 @@ def isStable(v, network, network_root, network_leaves):
 def isCompressed(network, network_reticulations):
     """Returns True if network N is compressed, False otherwise."""
     # skipping dots may improve speed
-    n_in_degree = network.in_degree
-    n_predecessors_iter = network.predecessors()
     compressed = True
     for reticulation in network_reticulations:
-        for p in (w for w in n_predecessors_iter(reticulation) if n_in_degree(w) > 1):
+        for p in (w for w in network.predecessors(reticulation) if network.in_degree(w) > 1):
             if VERBOSE:
                 print("Not compressed: the parent", p,
                       "of reticulation vertex", reticulation,
@@ -258,14 +253,13 @@ def isNearlyTreeChild(network, stable_vertices, reticulations_of_n):
 
     nearly_tree_child = True
     # skipping dots may improve speed
-    n_predecessors_iter = network.predecessors()
     # let's filter reticulations directly
     for reticulation in (v for v, d in network.in_degree() if d > 1):
         if not nearly_tree_child:
             break
         # Check if at least one parent of v has the tree path property
         parent_with_tree_path = False
-        for p in n_predecessors_iter(reticulation):
+        for p in network.predecessors(reticulation):
             if not parent_with_tree_path:
                 visited = set()
                 if VERBOSE:
@@ -294,7 +288,7 @@ def hasTreePath(v, network, visited):
     if v not in visited:
         visited.add(v)  # visited is now a set (see isNearlyTreeChild)
         n_in_degree = network.in_degree
-        for tree_successor in (s for s in network.successors_iter(v) if n_in_degree(s) == 1):
+        for tree_successor in (s for s in network.successors(v) if n_in_degree(s) == 1):
             has_tp = hasTreePath(tree_successor, network, visited)
             if has_tp:
                 break
@@ -308,7 +302,6 @@ def hasTreePath(v, network, visited):
 # Output: True if N is genetically stable, False otherwise
 def isGeneticallyStable(network, stable_vertices, reticulations_of_n):
     gen_stable = True
-    n_predecessors_iter = network.predecessors()
     for reticulation in reticulations_of_n:
         if not gen_stable:
             break
@@ -321,7 +314,7 @@ def isGeneticallyStable(network, stable_vertices, reticulations_of_n):
                 print("Vertex", reticulation, "is stable, testing if its parents are stable.")
             one_parent_stable = False
             # let's filter stable predecessors directly
-            for stable_predecessor in (v for v in n_predecessors_iter(reticulation) if v in stable_vertices):
+            for stable_predecessor in (v for v in network.predecessors(reticulation) if v in stable_vertices):
                 one_parent_stable = True
                 if VERBOSE:
                     print("Parent", stable_predecessor, "is stable.")
@@ -524,7 +517,7 @@ def main():
             # print "Time Tree-sibling: "+str((datetime.datetime.now()-t0).microseconds) + "ms."
 
             # reticulation-visible
-            # t0=datetime.datetime.now()
+            # t0 = datetime.datetime.now()
             ret_vis = n_classification.get("gs", False) or isReticulationVisible(
                 stable_vertices, reticulations_of_n
             )
@@ -541,7 +534,7 @@ def main():
             # print "Time Reticulation-visible: "+str((datetime.datetime.now()-t0).microseconds)+"ms."
 
             # compressed
-            # t0=datetime.datetime.now()
+            # t0 = datetime.datetime.now()
             comp = isCompressed(network, reticulations_of_n)
             n_classification["cp"] = comp
             if VERBOSE:
@@ -556,7 +549,7 @@ def main():
             # print "Time Compressed: "+str((datetime.datetime.now() - t0).microseconds)+"ms."
 
             # nearly-stable
-            # t0=datetime.datetime.now()
+            # t0 = datetime.datetime.now()
             ns = n_classification.get("tc", False) or isNearlyStable(network, stable_vertices)
             n_classification["ns"] = ns
             if VERBOSE:

@@ -1,28 +1,28 @@
 file,level,tree-child,nearly tree-child,genetically stable,tree-sibling,reticulation-visible,compressed,nearly stable
-n19.el,5,not tc,not ntc,not gs,ts,not rv,not cp,not ns
-n16.el,3,not tc,not ntc,not gs,ts,not rv,not cp,ns
-n11.el,5,not tc,ntc,gs,ts,rv,cp,not ns
-n6.el,32,not tc,not ntc,not gs,not ts,not rv,not cp,not ns
-n26.el,9,not tc,not ntc,not gs,ts,not rv,not cp,not ns
-n9.el,5,not tc,not ntc,not gs,not ts,not rv,not cp,not ns
-n3.el,2,tc,ntc,gs,ts,rv,cp,ns
-n25.el,4,tc,ntc,gs,ts,rv,cp,ns
-n14.el,4,not tc,not ntc,not gs,ts,not rv,not cp,ns
-n12.el,2,tc,ntc,gs,ts,rv,cp,ns
-n23.el,6,not tc,not ntc,not gs,not ts,not rv,not cp,not ns
-n22.el,1,tc,ntc,gs,ts,rv,cp,ns
-n13.el,4,not tc,not ntc,not gs,not ts,not rv,not cp,ns
-n18.el,5,not tc,not ntc,not gs,ts,not rv,cp,not ns
-n10.el,4,not tc,not ntc,not gs,ts,not rv,not cp,ns
-n7.el,5,not tc,not ntc,not gs,ts,not rv,not cp,not ns
-n17.el,2,tc,ntc,gs,ts,rv,cp,ns
-n24.el,6,not tc,not ntc,not gs,not ts,not rv,cp,not ns
-n2.el,11,not tc,ntc,gs,ts,rv,cp,ns
-n4.el,2,tc,ntc,gs,ts,rv,cp,ns
-n15.el,3,tc,ntc,gs,ts,rv,cp,ns
 n1.el,2,tc,ntc,gs,ts,rv,cp,ns
-n8.el,3,not tc,ntc,gs,ts,rv,cp,not ns
+n10.el,4,not tc,not ntc,not gs,ts,not rv,not cp,ns
+n11.el,5,not tc,ntc,gs,ts,rv,cp,not ns
+n12.el,2,tc,ntc,gs,ts,rv,cp,ns
+n13.el,4,not tc,not ntc,not gs,not ts,not rv,not cp,ns
+n14.el,4,not tc,not ntc,not gs,ts,not rv,not cp,ns
+n15.el,3,tc,ntc,gs,ts,rv,cp,ns
+n16.el,3,not tc,not ntc,not gs,ts,not rv,not cp,ns
+n17.el,2,tc,ntc,gs,ts,rv,cp,ns
+n18.el,5,not tc,not ntc,not gs,ts,not rv,cp,not ns
+n19.el,5,not tc,not ntc,not gs,ts,not rv,not cp,not ns
+n2.el,11,not tc,ntc,gs,ts,rv,cp,ns
 n20.el,1,tc,ntc,gs,ts,rv,cp,ns
 n21.el,5,not tc,ntc,gs,ts,rv,cp,ns
+n22.el,1,tc,ntc,gs,ts,rv,cp,ns
+n23.el,6,not tc,not ntc,not gs,not ts,not rv,not cp,not ns
+n24.el,6,not tc,not ntc,not gs,not ts,not rv,cp,not ns
+n25.el,4,tc,ntc,gs,ts,rv,cp,ns
+n26.el,9,not tc,not ntc,not gs,ts,not rv,not cp,not ns
 n27.el,1,tc,ntc,gs,ts,rv,cp,ns
+n3.el,2,tc,ntc,gs,ts,rv,cp,ns
+n4.el,2,tc,ntc,gs,ts,rv,cp,ns
 n5.el,4,not tc,ntc,gs,ts,rv,cp,ns
+n6.el,32,not tc,not ntc,not gs,not ts,not rv,not cp,not ns
+n7.el,5,not tc,not ntc,not gs,ts,not rv,not cp,not ns
+n8.el,3,not tc,ntc,gs,ts,rv,cp,not ns
+n9.el,5,not tc,not ntc,not gs,not ts,not rv,not cp,not ns

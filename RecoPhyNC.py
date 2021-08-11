@@ -408,6 +408,8 @@ def main():
 
     # read all data files in specified folder and classify networks -----------
     with open(os.path.join(folder, "results2.csv"), "w") as output:
+        output.write('file,level,tree-child,nearly tree-child,genetically stable,tree-sibling,reticulation-visible,'
+                     'compressed,nearly stable\n')
         for data_file in glob.glob(os.path.join(folder, "data", file_filter)):
             # network initialization and preprocessing
             print("Treating file", data_file)
@@ -450,7 +452,7 @@ def main():
                 print("Level of network:", level)
                 print("""""")
             n_classification["level"] = level
-            line = ''.join((line, ";", str(level)))  # join is faster
+            line = ''.join((line, ",", str(level)))  # join is faster
             # print "Time Level: "+str((datetime.datetime.now()-t0).microseconds)+"ms."
 
             # tree-child
@@ -459,11 +461,11 @@ def main():
             if n_classification["tc"]:
                 if VERBOSE:
                     print("""== network is tree-child.==""")
-                line = ''.join((line, ";tc"))
+                line = ''.join((line, ",tc"))
             else:
                 if VERBOSE:
                     print("""== network is not tree-child. ==""")
-                line = ''.join((line, ";not tc"))
+                line = ''.join((line, ",not tc"))
             # print "Time Tree-child: "+str((datetime.datetime.now()-t0).microseconds)+"ms."
 
             # nearly tree-child
@@ -472,15 +474,13 @@ def main():
             n_classification["ntc"] = ntc
             if VERBOSE:
                 if ntc:
-                    print("""== network is nearly tree-child. ==
-                 """)
+                    print("""== network is nearly tree-child. ==""")
                 else:
-                    print("""== network is not nearly tree-child. ==
-                 """)
+                    print("""== network is not nearly tree-child. ==""")
             if ntc:
-                line = ''.join((line, ";ntc"))
+                line = ''.join((line, ",ntc"))
             else:
-                line = ''.join((line, ";not ntc"))
+                line = ''.join((line, ",not ntc"))
             # print "Time Nearly tree-child: "+str((datetime.datetime.now()-t0).microseconds)+"ms."
 
             # genetically stable
@@ -494,9 +494,9 @@ def main():
                 else:
                     print("""== network is not genetically stable. ==""")
             if gen_stab:
-                line = ''.join((line, ";gs"))
+                line = ''.join((line, ",gs"))
             else:
-                line = ''.join((line, ";not gs"))
+                line = ''.join((line, ",not gs"))
             # print "Time Genetically stable: "+str((datetime.datetime.now()-t0).microseconds)+"ms."
 
             # tree-sibling
@@ -510,11 +510,11 @@ def main():
                 else:
                     print("""== network is not tree-sibling. ==""")
             if tr_sib:
-                line = ''.join((line, ";ts"))
+                line = ''.join((line, ",ts"))
             else:
-                line = ''.join((line, ";not ts"))
+                line = ''.join((line, ",not ts"))
 
-            # print "Time Tree-sibling: "+str((datetime.datetime.now()-t0).microseconds) + "ms."
+            # print "Time Tree-sibling: " +str((datetime.datetime.now()-t0).microseconds) + "ms."
 
             # reticulation-visible
             # t0 = datetime.datetime.now()
@@ -528,9 +528,9 @@ def main():
                 else:
                     print("""== network is not reticulation visible. ==""")
             if ret_vis:
-                line = ''.join((line, ";rv"))
+                line = ''.join((line, ",rv"))
             else:
-                line = ''.join((line, ";not rv"))
+                line = ''.join((line, ",not rv"))
             # print "Time Reticulation-visible: "+str((datetime.datetime.now()-t0).microseconds)+"ms."
 
             # compressed
@@ -543,9 +543,9 @@ def main():
                 else:
                     print("""== network is not compressed. ==""")
             if comp:
-                line = ''.join((line, ";cp"))
+                line = ''.join((line, ",cp"))
             else:
-                line = ''.join((line, ";not cp"))
+                line = ''.join((line, ",not cp"))
             # print "Time Compressed: "+str((datetime.datetime.now() - t0).microseconds)+"ms."
 
             # nearly-stable
@@ -558,9 +558,9 @@ def main():
                 else:
                     print("""== network is not nearly stable. ==""")
             if ns:
-                line = ''.join((line, ";ns"))
+                line = ''.join((line, ",ns"))
             else:
-                line = ''.join((line, ";not ns"))
+                line = ''.join((line, ",not ns"))
             # print "Time Compressed: " + str((datetime.datetime.now() - t0).microseconds)+"ms."
 
             # write information about the network

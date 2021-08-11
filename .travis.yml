@@ -1,16 +1,14 @@
+sudo: false
 os: linux
 dist: focal
 language:
   python
 python:
   - "3.8"
-before_install:
-  - sudo apt-get -y install python3-pip
-  - sudo apt-get -y install python-dev graphviz libgraphviz-dev pkg-config
 install:
   - pip install coverage
   - pip install networkx
 script:
-  - coverage run RecoPhyNC.py -f data
+  - coverage run RecoPhyNC.py -f data --verbose
 after_success:
   - bash <(curl -s https://codecov.io/bash)

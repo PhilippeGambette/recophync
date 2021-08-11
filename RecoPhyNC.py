@@ -64,22 +64,6 @@ def open_network(filename):
 
 
 # Input: binary rooted network N
-# Output: -1 if not nested, nested depth otherwise
-# Does not work yet
-def compute_nested_depth(network):
-    """Returns the nested depth of a rooted binary network N, or -1 if N is not
-     nested.
-    :rtype : int
-    """
-    biconn_comp = networkx.biconnected_components(network.to_undirected())
-    for B in biconn_comp:
-        # compute the nested depth of each bi-connected component
-        for node in B:
-            print(node)
-    return -1
-
-
-# Input: binary rooted network N
 # Output: level of N
 def computeLevel(network):
     """
@@ -88,12 +72,11 @@ def computeLevel(network):
     :return:
     """
     level = 0
-    print("Computing level...")
     undirected = network.to_undirected()
-    for BN, BE in zip(networkx.biconnected_components(undirected), networkx.biconnected_component_edges(undirected)):
+    for b_nodes, b_edges in zip(networkx.biconnected_components(undirected), networkx.biconnected_component_edges(undirected)):
         # compute the level of each bi-connected component
-        m = len(BN)
-        n = len(BE)
+        m = len(b_edges)
+        n = len(b_nodes)
         if m - n + 1 > level:
             level = m - n + 1
     return level
@@ -354,16 +337,6 @@ def contract(network):
             network.add_edge(list(network.predecessors(vertex))[0], list(network.successors(vertex))[0])
             network.remove_node(vertex)
             found_candidate = True
-
-
-# Input: a rooted phylogenetic network N
-# Output: number of leaves of N
-def leafNumber(network):
-    """
-    :param network:
-    :return:
-    """
-    return sum(1 for vertex, degree in network.out_degree() if not degree)
 
 
 # Input: a rooted phylogenetic network N

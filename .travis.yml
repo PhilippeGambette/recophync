@@ -1,0 +1,14 @@
+sudo: false
+os: linux
+dist: focal
+language:
+  python
+python:
+  - "3.8"
+install:
+  - pip install coverage
+  - pip install networkx
+script:
+  - coverage run RecoPhyNC.py -f data --verbose
+after_success:
+  - bash <(curl -s https://codecov.io/bash)

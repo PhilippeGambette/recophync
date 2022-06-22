@@ -22,7 +22,7 @@ import glob
 # in the same folder as this file.
 # 
 #############################################################################
-# Copyright (C) 2015-2016 Philippe Gambette, Anthony Labarre
+# Copyright (C) 2015-2021 Philippe Gambette, Anthony Labarre, Andrew Quijano
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by

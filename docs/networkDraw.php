@@ -19,8 +19,11 @@ $(document).ready(function(){
   
   $(".imageExample").attr("href",function(){
     var number = $(this).attr("id");
+    console.log(number)
     number="n"+number.substring(7,number.length+1);
     $("#titleAnchor").after('<a name="form_'+number+'"></a>');
+    console.log($("#"+number).parent().prev())
+    console.log("toto");
     $(this).attr("title","Figure from: '"+($("#"+number).parent().prev().prev().html()).replace(/(<([^>]+)>)/ig,"")+"'");
     return "#form_"+number;
   });
@@ -530,6 +533,8 @@ A51 43
 <h2>Examples</h2>
 <p>You can load examples of 28 phylogenetic networks found in the literature:
 <ul>
+<!-- ATTENTION ! S'il n'y a pas de nom de journal, ajouter les balises <i></i> après le titre du document -->
+<li>Figure 3.4 at page 99 of Willems, M. (2018). <a href="https://archipel.uqam.ca/11720/1/D3464.pdf#page=118">Nouveaux algorithmes pour l'inférence de réseaux phylogénétiques</a>. <i></i>Phd thesis presented at UQAM (Université du Québec à Montréal) <b>&rarr; <a href="#form_n34" id="n34" class="loadExample">load this network!</a></b></li>
 <li>Figure 1 of Wu, D.-D. et al. (2018). <a href="<!--http://dx.doi.org/10.1038/s41559-018-0562-y-->http://www.nielsenlab.org/wp-content/uploads/2018/05/s41559-018-0562-y.pdf">Pervasive introgression facilitated domestication and adaptation in the <i>Bos</i> species complex</a>. <i>Nature Ecology &amp; Evolution</i> 2:1139–1145 <b>&rarr; <a href="#form_n31" id="n31" class="loadExample">load this network!</a></b></li>
 <li>Figure 4 of Glemin, S., Scornavacca, C., Dainat, J., Burgarella, C., Viader, V., Ardisson, M., Sarah, G., Santoni, S., David, J. &amp; Ranwez, V. (2018). <a href="https://dx.doi.org/10.1101/300848">Pervasive hybridizations in the history of wheat relatives</a>. <i></i>bioRXiv manuscript <b>&rarr; <a href="#form_n28" id="n28" class="loadExample">load this network!</a></b></li>
 <li>Figure 4 of Oldman, J., Wu, T., van Iersel, L. &amp; Moulton, V. (2016). <a href="http://doi.org/10.1093/molbev/msw068">TriLoNet: Piecing Together Small Networks to Reconstruct Reticulate Evolutionary Histories</a>. <i>Molecular Biology and Evolution</i> 33(8)1:2151–2162 <b>&rarr; <a href="#form_n30" id="n30" class="loadExample">load this network!</a></b></li>
@@ -546,6 +551,7 @@ A51 43
 <li>Figure from <a href="http://phylonetworks.blogspot.fr/2015/01/complex-hybridizations-in-wheat.html"><i>The Genealogical World of Phylogenetic Networks</i></a>, derived from Marcussen, T., Sandve, S. R., Heier, L., Spannagl, M., Pfeifer, M., Jakobsen, K. S., ... &amp; Rogers, J. (2014). <a href="http://dx.doi.org/10.1126/science.1250092">Ancient hybridizations among the ancestral genomes of bread wheat</a>. <i>Science</i> 345(6194):1250092 <b>&rarr; <a href="#n15" id="n15" class="loadExample">load this network!</a></b></li>
 <li>Figure 15 from Willems, M., Tahiri, N. &amp; Makarenkov, V. (2014). <a href="http://accueil.labunix.uqam.ca/~makarenkov_v/makarenv/Article_JBCB.pdf">A new efficient algorithm for inferring explicit hybridization networks following the Neighbor-Joining principle</a>. <i>Journal of Bioinformatics and Computational Biology</i> 12(05):1450024.1-27 <b>&rarr; <a href="#form_n25" id="n25" class="loadExample">load this network!</a></b></li>
 <li>Figure 8 of Prüfer, K., Racimo, F., Patterson, N., Jay, F., Sankararaman, S., Sawyer, S., ... &amp; Li, H. (2014). <a href="http://dx.doi.org/10.1038/nature12886">The complete genome sequence of a Neanderthal from the Altai Mountains</a>. <i>Nature</i>, 505(7481), 43-49 <b>&rarr; <a href="#form_n21" id="n21" class="loadExample">load this network!</a></b></li>
+<li>Figure 4 of Unmack, P. J., Dowling, T. E., Laitinen, N. L., Secor, C. L., Mayden, R. L., Shiozawa, D. K, Smith, G. R. (2014). <a href="<https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0090061#pone-0090061-g004">Influence of Introgression and Geological Processes on Phylogenetic Relationships of Western North American Mountain Suckers (<i>Pantosteus</i>, Catostomidae)</a>. <i>PLoS ONE</i> 9(3):e90061 <b>&rarr; <a href="#form_n33" id="n33" class="loadExample">load this network!</a></b></li>
 <li>Figure 5 of Kannan L. &amp; Wheeler WC (2014). <a href="http://dx.doi.org/10.1089%2Fcmb.2013.0134">Exactly Computing the Parsimony Scores on Phylogenetic Networks Using Dynamic Programming</a>. <i>Journal of Computational Biology</i> 21(4):303–319 <b>&rarr; <a href="#form_n4" id="n4" class="loadExample">load this network!</a></b></li>
 <li>Figure 3 of Lazaridis I et al. (2014). <a href="http://dx.doi.org/10.1038/nature13673">Ancient human genomes suggest three ancestral populations for present-day Europeans</a>, <i>Nature</i> 513:409-413 <b>&rarr; <a href="#form_n14" id="n14" class="loadExample">load this network!</a></b></li>
 <li>Figure 2 of von Zabern I, Wagner FF, Moulds JM, Moulds JJ &amp; Flegel WA (2013). <a href="http://dx.doi.org/10.1111%2Ftrf.12145">D category IV: a group of clinically relevant and phylogenetically diverse partial D</a>. <i>Transfusion</i> 53:2960–2973 <b>&rarr; <a href="#form_n3" id="n3" class="loadExample">load this network!</a></b></li>
@@ -556,12 +562,13 @@ A51 43
 <!---->
 <li><a href="http://www.plantcell.org/content/plantcell/21/7/1897/F6.large.jpg">Figure 6</a> of Richards T. A., Soanes D. M., Foster P. G., Leonard G., Thornton C. R. &amp; Talbot N. J. (2009). <a href="http://dx.doi.org/10.1105/tpc.109.065805">Phylogenomic Analysis Demonstrates a Pattern of Rare and Ancient Horizontal Gene Transfer between Plants and Fungi</a>. <i>The Plant Cell</i> 21(7):1897-1911 <b>&rarr; <a href="#form_n26" id="n26" class="loadExample">load this network!</a></b></li>
 <li>Figure 3 of Charlton, N. D., Carbone, I., Tavantzis, S. M. &amp; Cubeta, M. A. (2008). <a href="http://dx.doi.org/10.3852/07-108R">Phylogenetic relatedness of the M2 double-stranded RNA in <i>Rhizoctonia</i> fungi</a>. <i>Mycologia</i> 100(4):555-564 <b>&rarr; <a href="#form_n6" id="n6" class="loadExample">load this network!</a></b></li>
+<li>Figure 4 of Koblmüller, S., Duftner, N., Sefc, K. M., Aibara, M., Stipacek, M., Blanc, M., Egger B., Sturmbauer, C. (2007). <a href="https://bmcecolevol.biomedcentral.com/articles/10.1186/1471-2148-7-7/figures/4">Reticulate phylogeny of gastropod-shell-breeding cichlids from Lake Tanganyika – the result of repeated introgressive hybridization</a>. <i>BMC Evolutionary Biology</i> 7(7) <b>&rarr; <a href="#form_n32" id="n32" class="loadExample">load this network!</a></b></li>
 <li>Figure 5 of Westenberger, S. J., Barnabé, C., Campbell, D. A. &amp; Sturm, N. R. (2005). <a href="http://dx.doi.org/10.1534/genetics.104.038745">Two Hybridization Events Define the Population Structure of <i>Trypanosoma cruzi</i></a>. <i>Genetics</i> 171(2):527-543 <b>&rarr; <a href="#form_n12" id="n12" class="loadExample">load this network!</a></b></li>
 <li>Figure 4 of Ge, S., To, S. &amp; Lu, B. R. (1999). <a href="http://dx.doi.org/10.1073/pnas.96.25.14400">Phylogeny of rice genomes with emphasis on origins of allotetraploid species</a>. <i>PNAS</i> 96(25):14400-14405 <b>&rarr; <a href="#form_n13" id="n13" class="loadExample">load this network!</a></b></li>
 <li>Figure 56 of Grant, V. (1971). <a href="http://www.amazon.com/Plant-Speciation-Verne-Grant/dp/0231083262"><i>Plant Speciation</i></a>,<i></i> Columbia University Press <b>&rarr; <a href="#form_n9" id="n9" class="loadExample">load this network!</a></b></li>
 <li>Figure 14.1 of Alston, R. E. &amp; Turner, B. L. (1963). <a href="http://www.biodiversitylibrary.org/item/26577#page/291/mode/1up"><i>Biochemical systematics</i></a>,<i></i> Englewood Cliffs, N.J., Prentice-Hall <b>&rarr; <a href="#form_n20" id="n20" class="loadExample">load this network!</a></b></li>
-<li>Figure 5 of Grant, V. (1953). <a href="http://dx.doi.org/10.2307/2405571"><i>The Role of Hybridization in the Evolution of the Leafty-Stemmed Gilias</i></a>,<i></i> Brittonia 5(4):337-367 <b>&rarr; <a href="#form_n22" id="n22" class="loadExample">load this network!</a></b></li>
-<li>Figure 96 of Taylor, H. (1945). <a href="http://www.jstor.org/stable/2804889"><i>Cyto-Taxonomy and Phylogeny of the Oleaceae</i></a>,<i></i> Evolution 7(1):51-64 <b>&rarr; <a href="#form_n23" id="n23" class="loadExample">load this network!</a></b></li>
+<li>Figure 5 of Grant, V. (1953). <a href="http://dx.doi.org/10.2307/2405571">The Role of Hybridization in the Evolution of the Leafty-Stemmed Gilias</a>, <i>Brittonia</i> 5(4):337-367 <b>&rarr; <a href="#form_n22" id="n22" class="loadExample">load this network!</a></b></li>
+<li>Figure 96 of Taylor, H. (1945). <a href="http://www.jstor.org/stable/2804889">Cyto-Taxonomy and Phylogeny of the Oleaceae</a>, <i>Evolution</i> 7(1):51-64 <b>&rarr; <a href="#form_n23" id="n23" class="loadExample">load this network!</a></b></li>
 </ul>
 </p>
 
@@ -598,6 +605,9 @@ The figures extracted from the article cited above are available below: click di
 <a href="" class="imageExample" id="network29"></a>
 <a href="" class="imageExample" id="network30"></a>
 <a href="" class="imageExample" id="network31"></a>
+<a href="" class="imageExample" id="network32"></a>
+<a href="" class="imageExample" id="network33"></a>
+<a href="" class="imageExample" id="network34"></a>
 </p>
 
 <!--

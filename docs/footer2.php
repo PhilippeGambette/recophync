@@ -15,7 +15,7 @@ and <a href="http://www.math.nus.edu.sg/~matzlx/">Louxin Zhang</a>.
 <br/><br/><br/><br/><br/></p>
 
 <p>
-S. Nguyen and A. Sirunyan have added some phylogenetic networks to this website, in the context of their Science Académie internship at LIGM in April 2016.
+S. Nguyen and A. Sirunyan added some phylogenetic networks to this website in the context of their Science Académie internship at LIGM in April 2016, as well as Gabriel Schneider during his internship at LIGM in December 2023.
 <br/>
 <a href="http://www.scienceacademie.org/presentation"><img src="./logos/Logo-ScienceAcademie.png" alt="Logo-ScienceAdademie" style="height:50px;margin:10px;margin-left:0px;padding-bottom:0px;margin-bottom:0px;float:left"></a>
 <a href="http://www.paris-montagne.org/"><img src="./logos/Logo-ParisMontagne.png" alt="Logo-ParisMontagne" style="height:45px;margin:10px;padding-bottom:10px;margin-bottom:10px;float:left"></a>

@@ -534,7 +534,10 @@ A51 43
 <p>You can load examples of 28 phylogenetic networks found in the literature:
 <ul>
 <!-- ATTENTION ! S'il n'y a pas de nom de journal, ajouter les balises <i></i> après le titre du document -->
+<li>Figure 7 of Zhang L., Abhari N., Colijn C., Wu Y. (2023). <a href="https://genome.cshlp.org/content/33/7/1053.full.pdf#page=7">A fast and scalable method for inferring phylogenetic networks from trees by aligning lineage taxon strings</a>. <i>Genome Research</i> 33:1053–1060 <b>&rarr; <a href="#form_n37" id="n37" class="loadExample">load this network!</a></b></li>
+<li>Figure 5b of Wheeler, W., Washburn, A. (2023). <a href="https://onlinelibrary.wiley.com/doi/pdf/10.1111/cla.12552">Parsimony optimization of phylogenetic networks</a>. <i>Cladistics</i> 39:456–474 <b>&rarr; <a href="#form_n36" id="n36" class="loadExample">load this network!</a></b> </li>
 <li>Figure 3.4 at page 99 of Willems, M. (2018). <a href="https://archipel.uqam.ca/11720/1/D3464.pdf#page=118">Nouveaux algorithmes pour l'inférence de réseaux phylogénétiques</a>. <i></i>Phd thesis presented at UQAM (Université du Québec à Montréal) <b>&rarr; <a href="#form_n34" id="n34" class="loadExample">load this network!</a></b></li>
+<li>Figure 4.6 at page 139 of Willems, M. (2018). <a href="https://archipel.uqam.ca/11720/1/D3464.pdf#page=158">Nouveaux algorithmes pour l'inférence de réseaux phylogénétiques</a>. <i></i>Phd thesis presented at UQAM (Université du Québec à Montréal) <b>&rarr; <a href="#form_n35" id="n35" class="loadExample">load this network!</a></b></li>
 <li>Figure 1 of Wu, D.-D. et al. (2018). <a href="<!--http://dx.doi.org/10.1038/s41559-018-0562-y-->http://www.nielsenlab.org/wp-content/uploads/2018/05/s41559-018-0562-y.pdf">Pervasive introgression facilitated domestication and adaptation in the <i>Bos</i> species complex</a>. <i>Nature Ecology &amp; Evolution</i> 2:1139–1145 <b>&rarr; <a href="#form_n31" id="n31" class="loadExample">load this network!</a></b></li>
 <li>Figure 4 of Glemin, S., Scornavacca, C., Dainat, J., Burgarella, C., Viader, V., Ardisson, M., Sarah, G., Santoni, S., David, J. &amp; Ranwez, V. (2018). <a href="https://dx.doi.org/10.1101/300848">Pervasive hybridizations in the history of wheat relatives</a>. <i></i>bioRXiv manuscript <b>&rarr; <a href="#form_n28" id="n28" class="loadExample">load this network!</a></b></li>
 <li>Figure 4 of Oldman, J., Wu, T., van Iersel, L. &amp; Moulton, V. (2016). <a href="http://doi.org/10.1093/molbev/msw068">TriLoNet: Piecing Together Small Networks to Reconstruct Reticulate Evolutionary Histories</a>. <i>Molecular Biology and Evolution</i> 33(8)1:2151–2162 <b>&rarr; <a href="#form_n30" id="n30" class="loadExample">load this network!</a></b></li>
@@ -608,6 +611,9 @@ The figures extracted from the article cited above are available below: click di
 <a href="" class="imageExample" id="network32"></a>
 <a href="" class="imageExample" id="network33"></a>
 <a href="" class="imageExample" id="network34"></a>
+<a href="" class="imageExample" id="network35"></a>
+<a href="" class="imageExample" id="network36"></a>
+<a href="" class="imageExample" id="network37"></a>
 </p>
 
 <!--
